@@ -1,0 +1,519 @@
+###Code for conducting validation of soil carbonate model
+
+#Prepare gridded climate data
+library(raster)
+
+#read in worldclim 2.5min mean temperature grids, downloaded 9-18-18
+setwd("C:/Users/gjbowen/Dropbox/Archived/ArcGIS/worldclim/")
+files = list.files(pattern="wc2.0_2.5m_tavg*")
+mtemp = stack(files)
+mat = mean(mtemp)
+writeRaster(mat, "wc2.0_2.5m_tavg_ma.tif")
+plot(mat)
+
+#now make quarterly seasonal averages
+qtemp = stack(mean(subset(mtemp, c(12,1,2))), 
+              mean(subset(mtemp, 3:5)), 
+              mean(subset(mtemp, 6:8)), 
+              mean(subset(mtemp, 9:11)))
+
+#find the hottest quarter
+hotq = which.max(qtemp)
+plot(hotq)
+
+#read in worldclim 2.5min precip grids, downloaded 9-18-18
+files = list.files(pattern="wc2.0_2.5m_prec*")
+mprec = stack(files)
+map = sum(mprec)
+writeRaster(map, "wc2.0_2.5m_prec_ma.tif", overwrite=TRUE)
+plot(map)
+
+#now make quarterly seasonal sums
+qprec = stack(sum(subset(mprec, c(12,1,2))), 
+              sum(subset(mprec, 3:5)), 
+              sum(subset(mprec, 6:8)), 
+              sum(subset(mprec, 9:11)))
+
+#find the driest quarter
+dryq = which.min(qprec)
+plot(dryq)
+
+#now pull hot quarter temps into a single raster
+hqt = max(qtemp)
+plot(hqt)
+
+#this is what that would look like as tseas
+hqt.offset = hqt - mat
+plot(hqt.offset)
+
+#and get hot quarter precip as well
+#first pull the values from the raster into a matrix
+qprec.mat = matrix(c(qprec[[1]][], qprec[[2]][], qprec[[3]][], qprec[[4]][]), length(qprec[[1]]), 4)
+#now set up space in a raster to store results
+hqp = hotq
+#now use the magic of cbind to select the matrix colums for the hot quarter and combine
+hqp[] = qprec.mat[cbind(1:nrow(qprec.mat), hotq[])]
+plot(hqp)
+
+#then this is what we want as pseas for the model
+hqp.frac = hqp/map
+plot(hqp.frac)
+
+#now get dry quarter temp, using the same method
+qtemp.mat = matrix(c(qtemp[[1]][], qtemp[[2]][], qtemp[[3]][], qtemp[[4]][]), length(qtemp[[1]]), 4)
+dqt = dryq
+dqt[] = qtemp.mat[cbind(1:nrow(qtemp.mat), dryq[])]
+plot(dqt)
+
+dqt.offset = dqt - mat
+plot(dqt.offset)
+
+#and lastly the dry quarter precip
+dqp = min(qprec)
+plot(dqp)
+
+dqp.frac = dqp/map
+plot(dqp.frac)
+
+#####That's all the grid processing - next bit needs only be run once after data are updated
+
+#read in the compiled data
+setwd("C:/Users/gjbowen/Dropbox/HypoMirror/Soil_C_modeling/GJB_BigBendPaper/soilCCModern/")
+library(xlsx)
+
+#extract relevant values at sites
+sites = read.xlsx("modern_comparison.xlsx", sheetIndex = 1)
+coords = matrix(c(sites$Lon, sites$Lat),nrow(sites),2)
+sites$mat.wc = extract(mat, coords)
+sites$map.wc = extract(map, coords)
+sites$hqt.offset = extract(hqt.offset, coords)
+sites$hqp.frac = extract(hqp.frac, coords)
+sites$dqt.offset = extract(dqt.offset, coords)
+sites$dqp.frac = extract(dqp.frac, coords)
+
+write.csv(sites, "valsites.csv")
+
+#This does the same for a screened subset of sites
+sites = read.xlsx("modern_comparison.xlsx", sheetIndex = 2)
+coords = matrix(c(sites$Lon, sites$Lat),nrow(sites),2)
+sites$mat.wc = extract(mat, coords)
+sites$map.wc = extract(map, coords)
+sites$hqt.offset = extract(hqt.offset, coords)
+sites$hqp.frac = extract(hqp.frac, coords)
+sites$dqt.offset = extract(dqt.offset, coords)
+sites$dqp.frac = extract(dqp.frac, coords)
+
+write.csv(sites, "valsites.sel.csv")
+
+#some code to plot up values for some sites
+plot(sites$mat.wc, sites$map.wc)
+plot(sites$MAT, sites$mat.wc)
+abline(0,1)
+
+plot(sites$MAP, sites$map.wc)
+abline(0,1)
+
+######Now code to run some simulations
+nsynth = 5000
+
+sites = read.csv("valsites.csv")
+
+#read in real data
+data = read.xlsx("modern_comparison.xlsx", sheetIndex = 3)
+data.aves = aggregate.data.frame(data, list(data$Site), mean, simplify = TRUE)
+data.aves$Site = NULL
+data.comp = merge.data.frame(sites, data.aves, by.x = "Site", by.y = "Group.1")
+
+###This part runs only sites w/ clumpted data
+sites = data.comp[!is.na(data.comp$Clumped.T),]
+for(i in 1:nrow(sites)){
+  if(is.na(sites$MAT[i])){sites$MAT[i] = sites$mat.wc[i]}
+  if(is.na(sites$MAP[i])){sites$MAP[i] = sites$map.wc[i]}
+}
+
+clump_pred = data.frame(depth=numeric(0), soil18O=numeric(0), d13C=numeric(0), d18O=numeric(0))
+for(i in 1:nrow(sites)){
+  clump_pred[i,] = sm_forward(sites$MAP[i], sites$MAT[i], sites$hqp.frac[i], sites$Clumped.T[i]-sites$MAT[i], 280)
+  
+}
+clump_pred$Site = sites$Site
+
+#add it to the predictions and plot
+clump.comp = merge.data.frame(clump_pred, sites, by.x = "Site", by.y = "Site", all.x=TRUE)
+plot(hq.comp$d13C, hq.comp$d13C..measured.)
+abline(0,1)
+plot(hq.comp$d18O, hq.comp$d18O..measured.)
+abline(0,1)
+
+#run this for only the no superarid ones
+sites = read.csv("valsites_sel.csv")
+
+sites = sites[sites$map.wc > 200,]
+
+hq_pred = data.frame(depth=numeric(0), soil18O=numeric(0), d13C=numeric(0), d18O=numeric(0))
+for(i in 1: nrow(sites)){
+  hq_pred[i,] = sm_forward(sites$map.wc[i], sites$mat.wc[i], sites$hqp.frac[i], sites$hqt.offset[i], 280)
+  
+}
+hq_pred$Site = sites$Site
+
+dq_pred = data.frame(depth=numeric(0), soil18O=numeric(0), d13C=numeric(0), d18O=numeric(0))
+for(i in 1: nrow(sites)){
+  dq_pred[i,] = sm_forward(sites$map.wc[i], sites$mat.wc[i], sites$dqp.frac[i], sites$dqt.offset[i], 280)
+  
+}
+dq_pred$Site = sites$Site
+
+#add it to the predictions and plot
+hq.comp = merge.data.frame(hq_pred, data.aves, by.x = "Site", by.y = "Group.1", all.x=TRUE)
+plot(hq.comp$d13C, hq.comp$d13C..measured.)
+abline(0,1)
+plot(hq.comp$d18O, hq.comp$d18O..measured.)
+abline(0,1)
+
+dq.comp = merge.data.frame(dq_pred, data.aves, by.x = "Site", by.y = "Group.1")
+plot(dq.comp$d13C, dq.comp$d13C..measured.)
+abline(0,1)
+plot(dq.comp$d18O, dq.comp$d18O..measured.)
+abline(0,1)
+
+###############Forward model function for use in sensitivity testing
+
+sm_forward = function(MAP, MAT, P_seas, T_seas, pCO2){
+
+    deltaA = rnorm(nsynth, -6.5, 0.3)
+    ST = rnorm(nsynth, 0.5, 0.1)
+    EPSmax <- 0.1 + ST * 0.4
+    
+    #Solar radiation, here fixed
+    Rs = 20.35
+    
+    #Isotope ratio constants
+    RC.vpdb = 0.011237
+    RO.vsmow = 0.0020052
+    RO.vpdb = 0.002067181
+    
+    #Basal depth
+    L = 100
+    
+    #Climate stuff
+    CQP <- MAP * P_seas
+    CQP = max(CQP, 3)
+    CMP_mm <- CQP / 3
+    CMP_cm <- CQP / 30
+    CQT <- MAT + T_seas
+    CQT_K <- CQT + 273
+
+    #Convert pCO2 to units mol/cm^3
+    avo = 6.023e23  #mols per million molecules
+    v.million = 0.0821e6 * CQT_K / avo  #volume in L of 1 million molecules
+                                                #from ideal gas law; denom is pressure
+                                                #& should be func of elevation
+    v.million = v.million * 1000  #in /cm3
+    pCO2_mcc = pCO2 / (v.million * avo)  #mol/cm^3
+
+    #Relative humidity, now beta distribution
+    h_m <- 0.25 + 0.7 * (CQP / 900)
+    h_var = 0.05^2
+    size = h_m*(1-h_m)/h_var - 1
+    alpha = h_m * size
+    beta = (1-h_m) * size
+    h = rbeta(nsynth, alpha, beta)
+    RH <- h * 100
+    
+    #Precipitation O isotope ratios 
+    dO_P_m <- -13.7 + 0.55 * MAT
+    dO_P = rnorm(nsynth, dO_P_m, 1.7)
+    R_O_P = (dO_P / 1000 + 1) * RO.vsmow
+
+    #Depth to carbonate, now gamma dist
+    z_mean <- MAP*0.0925 + 13.4  #top of Bk equation based on Retallack 2005 data
+    z_thick = abs(CMP_mm - MAP/12) * 0.74 + 17.3 #thickness of Bk, CMP as proxy for seasonality 
+    z_mean = z_mean + z_thick/2 #find middle of Bk in cm
+    theta = 20^2/z_mean  #gamma scale parameter, using 20cm as variance from Retallack fit
+    k = z_mean / theta #gamma shape parameter
+    z = rgamma(nsynth, shape = k, scale = theta)
+    z <- pmin(z, 100) 
+    
+    #Respiration rate, now gamma dist
+    R_month_m <- 1.25 * exp(0.05452 * CQT) * CMP_cm / (12.7 + CMP_cm)  #Raich 2002, gC/m2day
+    theta = (R_month_m*0.5)^2/R_month_m #gamma scale parameter, using mean residual of 50% based on Raich validation data 
+    k = R_month_m / theta #gamma shape parameter
+    R_month = rgamma(nsynth, shape = k, scale = theta) #lets use gamma for these quants bounded at zero....
+    R_month = R_month / (12.01 * 100^2)  #molC/cm2month
+    R_sec <- R_month / (24 * 3600)  #molC/cm2s
+    R_sec = R_sec / L #molC/cm3s
+    
+    #Potential ET
+    ETP_D_m <- ifelse (RH < 50, 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50) * (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50))
+    ETP_D = rnorm(nsynth, ETP_D_m, 0.2)  #PET in mm/day, Turc 1961
+    ETP_M <- ETP_D * 30  #mm/month
+    
+    #Actual ET
+    ETA_var = rnorm(nsynth, 1, 0.2) #This noise parmeter limits ETA<CMP_mm but allows variation around ETP, as observed
+    ETA = CMP_mm*3 * (1 / (sqrt(1 + (1 / ((ETP_M / (CMP_mm*3)) * ETA_var)) ^ 2))) #AET in mm/month from Budyko curve
+    #here scaled eta to quarter precip, assuming potential carry-over
+    
+    #Free air porosity
+    #Have updated, now scales volumetrically w/ excess precipitation relative to pore space
+    EPS <- pmin((EPSmax - (CMP_mm - ETA)/(1000*EPSmax)), EPSmax)
+    EPS = pmax(EPS,0.01) #dimensionless
+    
+    #CO2 Diffusion coefficients
+    DIFC = EPS * 0.1369 * (CQT_K / 273.15) ^ 1.958
+    DIFC13 <- DIFC * (1 / 1.004443)
+    
+    #Water limitation of discriminaton, Diefendorf
+    W_m <- 22.65 - (1.2 * (MAP + 975)) / (27.2 + 0.04 * (MAP + 975))
+    W = rnorm(nsynth, W_m, 0.5)
+    
+    #CO2 effect on discrimination, Schubert
+    deltaP_pCO2_m <- 28.26 * 0.35 * (pCO2 + 15) / (28.26 + 0.35 * (pCO2 + 15))
+    deltaP_pCO2 = rnorm(nsynth, deltaP_pCO2_m, 0.5)
+    
+    #Discrimination
+    deltaP <- deltaA - (deltaP_pCO2 - W)
+    
+    #Soil CO2 C isotopes
+    deltaA_hat <- (deltaA / 1000 + 1) * RC.vpdb / (1 + RC.vpdb * (deltaA / 1000 + 1))
+    deltaP_hat <- (deltaP / 1000 + 1) * RC.vpdb / (1 + RC.vpdb * (deltaP / 1000 + 1))
+    dC_Soil.resp = R_sec/(DIFC) * (L * z - z^2 / 2)
+    dC_Soil.num = dC_Soil.resp * DIFC * deltaP_hat / DIFC13 + pCO2_mcc * deltaA_hat
+    dC_Soil.denom = dC_Soil.resp * (1 - DIFC * deltaP_hat / DIFC13) + pCO2_mcc * (1 - deltaA_hat)
+    dC_Soil = (dC_Soil.num / (dC_Soil.denom * RC.vpdb) - 1) * 1000
+    
+    #Soil carbonate C isotopes
+    A_CO2_Carb <- 2.71828 ^ (-2.988e3 / CQT_K ^ 2 + 7.6663 / CQT_K - 0.0024612)
+    R_Soil <- (dC_Soil / 1000 + 1) * RC.vpdb
+    R_Carb <- R_Soil / A_CO2_Carb
+
+    #Soil carbonate O isotopes
+#    CTF = 0.2 + 1.3 * MAT / 20
+#    CT = (MAT + T_seas * CTF) + 273
+    A_O <- 2.71828 ^ ((2.78e6 / CQT_K ^ 2 - 2.89) / 1000)
+    R_O_Carb <- R_O_P * A_O
+    
+    dC_Carb <- (R_Carb / RC.vpdb - 1) * 1000
+    dO_Carb <- (R_O_Carb / RO.vpdb - 1) * 1000
+  
+    dat = c(median(dC_Carb), median(dO_Carb))
+  
+  return(dat)
+}
+
+#This code was used for testing and making some validation plots...
+sites = read.csv("valsites_sel.csv")
+data.comp = merge.data.frame(sites, data.aves, by.x = "Site", by.y = "Group.1")
+
+hq_pred = data.frame(d13C=numeric(0), d18O=numeric(0))
+for(i in 1: nrow(sites)){
+  hq_pred[i,] = sm_forward(data.comp$map.wc[i], data.comp$mat.wc[i], data.comp$hqp.frac[i], data.comp$hqt.offset[i], 280)
+}
+hq_pred$Site = data.comp$Site
+
+hq.comp = merge.data.frame(hq_pred, data.comp, by.x = "Site", by.y = "Site", all.x=TRUE)
+
+c = ceiling((hq.comp$map.wc) / max(hq.comp$map.wc) * 6)
+pal = rainbow(6)
+
+jpeg("validation.jpg", res=300, units="in", width = 10, height = 5)
+layout(matrix(c(1,2), 1, 2, byrow = TRUE))
+par(mar=c(5,5,1,1))
+plot(hq.comp$d13C, hq.comp$d13C..measured., pch=16, col=pal[c], 
+     xlab=expression(paste("Predicted ",delta^{13}, "C (\u2030)")),
+     ylab=expression(paste("Observed ",delta^{13}, "C (\u2030)")))
+points(hq.comp$d13C[hq.comp$map.wc>100], hq.comp$d13C..measured.[hq.comp$map.wc>100], pch=1)
+abline(0,1)
+
+plot(hq.comp$d18O, hq.comp$d18O..measured., pch=16, col=pal[c],
+     xlab=expression(paste("Predicted ",delta^{18}, "O (\u2030)")),
+     ylab=expression(paste("Observed ",delta^{18}, "O (\u2030)")))
+points(hq.comp$d18O[hq.comp$map.wc>100], hq.comp$d18O..measured.[hq.comp$map.wc>100], pch=1)
+abline(0,1)
+dev.off()
+
+###############Forward model function for use in sensitivity testing
+
+sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, spre, esw){
+  
+  deltaA = rnorm(nsynth, -6.5, 0.3)
+  ST = rnorm(nsynth, 0.5, 0.1)
+  EPSmax <- 0.1 + ST * 0.4
+  
+  #Solar radiation, here fixed
+  Rs = 20.35
+  
+  #Isotope ratio constants
+  RC.vpdb = 0.011237
+  RO.vsmow = 0.0020052
+  RO.vpdb = 0.002067181
+  
+  #Basal depth
+  L = 100
+  
+  #Climate stuff
+  CQP <- MAP * P_seas
+  CQP = max(CQP, 3)
+  CMP_mm <- CQP / 3
+  CMP_cm <- CQP / 30
+  CQT <- MAT + T_seas
+  CQT_K <- CQT + 273
+  
+  #Convert pCO2 to units mol/cm^3
+  avo = 6.023e23  #mols per million molecules
+  v.million = 0.0821e6 * CQT_K / avo  #volume in L of 1 million molecules
+  #from ideal gas law; denom is pressure
+  #& should be func of elevation
+  v.million = v.million * 1000  #in /cm3
+  pCO2_mcc = pCO2 / (v.million * avo)  #mol/cm^3
+  
+  #Relative humidity, now beta distribution
+  h_m <- 0.25 + 0.7 * (CQP / 900)
+  h_var = 0.05^2
+  size = h_m*(1-h_m)/h_var - 1
+  alpha = h_m * size
+  beta = (1-h_m) * size
+  h = rbeta(nsynth, alpha, beta)
+  RH <- h * 100
+  
+  #Precipitation O isotope ratios 
+  dO_P_m <- -13.7 + 0.55 * (MAT + T_seas * spre)  #Relevant precip is spre % from CQ
+  dO_P = rnorm(nsynth, dO_P_m, 1.7)
+  
+  #Atmospheric vapor O isotope ratios
+  A_atmP <- 2.71828 ^ ((5.9702e6 / CQT_K ^ 2 - 3.2801e4 / CQT_K + 52.227) / 1000)
+  R_O_P <- (dO_P / 1000 + 1) * RO.vsmow
+  R_O_atm <- R_O_P / A_atmP
+  dO_atm_m <- (R_O_atm / RO.vsmow - 1) * 1000
+  dO_atm = rnorm(nsynth, dO_atm_m, 1)
+  
+  #Depth to carbonate, now gamma dist
+  z_mean <- MAP*0.0925 + 13.4  #top of Bk equation based on Retallack 2005 data
+  z_thick = abs(CMP_mm - MAP/12) * 0.74 + 17.3 #thickness of Bk, CMP as proxy for seasonality 
+  z_mean = z_mean + z_thick/2 #find middle of Bk in cm
+  theta = 20^2/z_mean  #gamma scale parameter, using 20cm as variance from Retallack fit
+  k = z_mean / theta #gamma shape parameter
+  z = rgamma(nsynth, shape = k, scale = theta)
+  z <- pmin(z, 100) 
+  z_m <- z * 0.01
+  
+  #Respiration rate, now gamma dist
+  R_month_m <- 1.25 * exp(0.05452 * CQT) * CMP_cm / (12.7 + CMP_cm)  #Raich 2002, gC/m2day
+  theta = (R_month_m*0.5)^2/R_month_m #gamma scale parameter, using mean residual of 50% based on Raich validation data 
+  k = R_month_m / theta #gamma shape parameter
+  R_month = rgamma(nsynth, shape = k, scale = theta) #lets use gamma for these quants bounded at zero....
+  R_month = R_month / (12.01 * 100^2)  #molC/cm2month
+  R_sec <- R_month / (24 * 3600)  #molC/cm2s
+  R_sec = R_sec / L #molC/cm3s
+  
+  #Potential ET
+  ETP_D_m <- ifelse (RH < 50, 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50) * (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50))
+  ETP_D = rnorm(nsynth, ETP_D_m, 0.2)  #PET in mm/day, Turc 1961
+  ETP_M <- ETP_D * 30  #mm/month
+  
+  #Actual ET
+  ETA_var = rnorm(nsynth, 1, 0.2) #This noise parmeter limits ETA<CMP_mm but allows variation around ETP, as observed
+  ETA = CMP_mm*3 * (1 / (sqrt(1 + (1 / ((ETP_M / (CMP_mm*3)) * ETA_var)) ^ 2))) #AET in mm/month from Budyko curve
+  #here scaled eta to quarter precip, assuming potential carry-over
+  
+  #Free air porosity
+  #Have updated, now scales volumetrically w/ excess precipitation relative to pore space
+  EPS <- pmin((EPSmax - (CMP_mm - ETA)/(1000*EPSmax)), EPSmax)
+  EPS = pmax(EPS,0.01) #dimensionless
+  
+  #CO2 Diffusion coefficients
+  DIFC = EPS * 0.1369 * (CQT_K / 273.15) ^ 1.958
+  DIFC <- EPS * 0.14 #cm2/second  #removed tortuosity term
+  DIFC13 <- DIFC * (1 / 1.004443)
+  
+  #Water limitation of discriminaton, Diefendorf
+  W_m <- 22.65 - (1.2 * (MAP + 975)) / (27.2 + 0.04 * (MAP + 975))
+  W = rnorm(nsynth, W_m, 0.5)
+  
+  #CO2 effect on discrimination, Schubert
+  deltaP_pCO2_m <- 28.26 * 0.35 * (pCO2 + 15) / (28.26 + 0.35 * (pCO2 + 15))
+  deltaP_pCO2 = rnorm(nsynth, deltaP_pCO2_m, 0.5)
+  
+  #Discrimination
+  deltaP <- deltaA - (deltaP_pCO2 - W)
+  
+  #Soil CO2 C isotopes
+  deltaA_hat <- (deltaA / 1000 + 1) * RC.vpdb / (1 + RC.vpdb * (deltaA / 1000 + 1))
+  deltaP_hat <- (deltaP / 1000 + 1) * RC.vpdb / (1 + RC.vpdb * (deltaP / 1000 + 1))
+  dC_Soil.resp = R_sec/(DIFC) * (L * z - z^2 / 2)
+  dC_Soil.num = dC_Soil.resp * DIFC * deltaP_hat / DIFC13 + pCO2_mcc * deltaA_hat
+  dC_Soil.denom = dC_Soil.resp * (1 - DIFC * deltaP_hat / DIFC13) + pCO2_mcc * (1 - deltaA_hat)
+  dC_Soil = (dC_Soil.num / (dC_Soil.denom * RC.vpdb) - 1) * 1000
+  
+  #Soil carbonate C isotopes
+  A_CO2_Carb <- 2.71828 ^ (-2.988e3 / CQT_K ^ 2 + 7.6663 / CQT_K - 0.0024612)
+  R_Soil <- (dC_Soil / 1000 + 1) * RC.vpdb
+  R_Carb <- R_Soil / A_CO2_Carb
+  
+  #Soil water evaporation, now beta dist
+  e_mean = 0.06  #evap is 6% of total ET
+  e_var = 0.04^2
+  size = e_mean*(1-e_mean)/e_var - 1
+  alpha = e_mean * size
+  beta = (1-e_mean) * size
+  E = rbeta(nsynth, alpha, beta) * ETA #mm/month
+  E = pmax(E, 1) #mm/month
+  
+  #Soil water diffusion evaporation balance
+  E_s <- E / (1000 * 30 * 24 * 3600) #evaporation in m/sec
+  DIFO <- 1.637e-8 * (CQT_K / 216.25 - 1) ^ 2.074 * EPS
+  DIFO <- EPS * 2.3e-9   #m2/sec
+  z_i <- DIFO / E_s #mean penitration depth of evap, in m
+  
+  #Soil water O isotopes
+  DRF <- 1 + 0.8 * (1 / 0.9723 - 1)
+  R_O_surface <- ((1 - h) * DRF * R_O_P + h * R_O_atm) / (1 / A_atmP)
+  R_O_soil <- ((R_O_surface - R_O_P) * 2.71828 ^ (-z_m / z_i)) + R_O_P
+  R_O_soil = R_O_soil * esw + R_O_P * (1 - esw)  #soil water is esw % evaporated fraction
+  dO_soil <- (R_O_soil/RO.vsmow - 1) * 1000
+  
+  #Soil carbonate O isotopes
+  A_O <- 2.71828 ^ ((2.78e6 / CQT_K ^ 2 - 2.89) / 1000)
+  R_O_Carb <- R_O_soil * A_O
+  
+  dC_Carb <- (R_Carb / RC.vpdb - 1) * 1000
+  dO_Carb <- (R_O_Carb / RO.vpdb - 1) * 1000
+  
+  return(median(dO_Carb))
+}
+
+sites = sites[sites$map.wc > 100,]
+
+s = seq(0,0.95,0.05)
+ss = seq(0, 1-0.05/20, 0.05/20)
+ss = ss*20
+ss = trunc(ss)
+ss = ss/20
+
+parms = data.frame(spres = ss, esws = rep(s, 20), rmse = numeric(400))
+
+for(j in 1:nrow(parms)){
+  opt = numeric()
+  for(i in 1: nrow(sites)){
+    opt[i] = sm_optimizer(sites$map.wc[i], sites$mat.wc[i], sites$hqp.frac[i], sites$hqt.offset[i], 280, parms$spres[j], parms$esws[j])
+  }
+
+  opt = data.frame(Site = sites$Site, d18O = opt)
+  opt = merge.data.frame(opt, data.comp, by.x = "Site", by.y = "Site", all.x=TRUE)
+  
+  mse = (opt$d18O - opt$d18O..measured.)^2
+  mse = mean(mse)
+  parms$rmse[j] = sqrt(mse)
+}
+
+View(parms)
+
+rmses = matrix(parms$rmse, 20, 20)
+rmses = rmses[c(20:1),]
+rmses.rast = raster(rmses, xmn=0, xmx=0.95, ymn=0, ymx=0.95)
+
+jpeg("O_opt.jpg", res=300, units="in", width = 5.7, height = 5)
+par(mai=c(1.05, 0.9, 0.6, 0.8))
+plot(rmses.rast, xlab="% seasonal rainfall", ylab="% evaporated water")  #now need to make a nice plot...
+mtext("RMSE, per mil", 4, line=1.9)
+dev.off()
