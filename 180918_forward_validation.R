@@ -125,27 +125,28 @@ data.aves$Site = NULL
 data.comp = merge.data.frame(sites, data.aves, by.x = "Site", by.y = "Group.1")
 
 ###This part runs only sites w/ clumpted data
-sites = data.comp[!is.na(data.comp$Clumped.T),]
+data.clump = data.comp[!is.na(data.comp$D47.measured),]
 for(i in 1:nrow(sites)){
-  if(is.na(sites$MAT[i])){sites$MAT[i] = sites$mat.wc[i]}
-  if(is.na(sites$MAP[i])){sites$MAP[i] = sites$map.wc[i]}
+  if(is.na(data.clump$MAT[i])){data.clump$MAT[i] = data.clump$mat.wc[i]}
+  if(is.na(data.clump$MAP[i])){data.clump$MAP[i] = data.clump$map.wc[i]}
 }
 
 clump_pred = data.frame(depth=numeric(0), soil18O=numeric(0), d13C=numeric(0), d18O=numeric(0))
+data.clump$Clumped_T = sqrt(0.0422e6 / (data.clump$D47.measured - 0.215)) - 273.15
 for(i in 1:nrow(sites)){
-  clump_pred[i,] = sm_forward(sites$MAP[i], sites$MAT[i], sites$hqp.frac[i], sites$Clumped.T[i]-sites$MAT[i], 280)
+  clump_pred[i,] = sm_forward(data.clump$MAP[i], data.clump$MAT[i], data.clump$hqp.frac[i], data.clump$Clumped.T[i]-data.clump$MAT[i], 280)
   
 }
-clump_pred$Site = sites$Site
+clump_pred$Site = data.clump$Site
 
 #add it to the predictions and plot
-clump.comp = merge.data.frame(clump_pred, sites, by.x = "Site", by.y = "Site", all.x=TRUE)
-plot(hq.comp$d13C, hq.comp$d13C..measured.)
+clump.comp = merge.data.frame(clump_pred, data.clump, by.x = "Site", by.y = "Site", all.x=TRUE)
+plot(clump.comp$d13C, clump.comp$d13C.measured)
 abline(0,1)
-plot(hq.comp$d18O, hq.comp$d18O..measured.)
+plot(clump.comp$d18O, clump.comp$d18O.measured)
 abline(0,1)
 
-#run this for only the no superarid ones
+#run this for only the not superarid ones
 sites = read.csv("valsites_sel.csv")
 
 sites = sites[sites$map.wc > 200,]
@@ -166,15 +167,15 @@ dq_pred$Site = sites$Site
 
 #add it to the predictions and plot
 hq.comp = merge.data.frame(hq_pred, data.aves, by.x = "Site", by.y = "Group.1", all.x=TRUE)
-plot(hq.comp$d13C, hq.comp$d13C..measured.)
+plot(hq.comp$d13C, hq.comp$d13C.measured)
 abline(0,1)
-plot(hq.comp$d18O, hq.comp$d18O..measured.)
+plot(hq.comp$d18O, hq.comp$d18O.measured)
 abline(0,1)
 
 dq.comp = merge.data.frame(dq_pred, data.aves, by.x = "Site", by.y = "Group.1")
-plot(dq.comp$d13C, dq.comp$d13C..measured.)
+plot(dq.comp$d13C, dq.comp$d13C.measured)
 abline(0,1)
-plot(dq.comp$d18O, dq.comp$d18O..measured.)
+plot(dq.comp$d18O, dq.comp$d18O.measured)
 abline(0,1)
 
 ###############Forward model function for use in sensitivity testing
@@ -319,16 +320,16 @@ pal = rainbow(6)
 jpeg("validation.jpg", res=300, units="in", width = 10, height = 5)
 layout(matrix(c(1,2), 1, 2, byrow = TRUE))
 par(mar=c(5,5,1,1))
-plot(hq.comp$d13C, hq.comp$d13C..measured., pch=16, col=pal[c], 
+plot(hq.comp$d13C, hq.comp$d13C.measured, pch=16, col=pal[c], 
      xlab=expression(paste("Predicted ",delta^{13}, "C (\u2030)")),
      ylab=expression(paste("Observed ",delta^{13}, "C (\u2030)")))
-points(hq.comp$d13C[hq.comp$map.wc>100], hq.comp$d13C..measured.[hq.comp$map.wc>100], pch=1)
+points(hq.comp$d13C[hq.comp$map.wc>100], hq.comp$d13C.measured[hq.comp$map.wc>100], pch=1)
 abline(0,1)
 
-plot(hq.comp$d18O, hq.comp$d18O..measured., pch=16, col=pal[c],
+plot(hq.comp$d18O, hq.comp$d18O.measured, pch=16, col=pal[c],
      xlab=expression(paste("Predicted ",delta^{18}, "O (\u2030)")),
      ylab=expression(paste("Observed ",delta^{18}, "O (\u2030)")))
-points(hq.comp$d18O[hq.comp$map.wc>100], hq.comp$d18O..measured.[hq.comp$map.wc>100], pch=1)
+points(hq.comp$d18O[hq.comp$map.wc>100], hq.comp$d18O.measured[hq.comp$map.wc>100], pch=1)
 abline(0,1)
 dev.off()
 
@@ -501,7 +502,7 @@ for(j in 1:nrow(parms)){
   opt = data.frame(Site = sites$Site, d18O = opt)
   opt = merge.data.frame(opt, data.comp, by.x = "Site", by.y = "Site", all.x=TRUE)
   
-  mse = (opt$d18O - opt$d18O..measured.)^2
+  mse = (opt$d18O - opt$d18O.measured)^2
   mse = mean(mse)
   parms$rmse[j] = sqrt(mse)
 }
