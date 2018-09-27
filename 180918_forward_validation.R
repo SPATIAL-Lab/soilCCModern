@@ -103,7 +103,7 @@ sites$hqp.frac = extract(hqp.frac, coords)
 sites$dqt.offset = extract(dqt.offset, coords)
 sites$dqp.frac = extract(dqp.frac, coords)
 
-write.csv(sites, "valsites.sel.csv")
+write.csv(sites, "valsites_sel.csv")
 
 #some code to plot up values for some sites
 plot(sites$mat.wc, sites$map.wc)
