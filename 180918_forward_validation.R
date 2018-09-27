@@ -332,11 +332,12 @@ dev.off()
 sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, spre, esw){
   
   deltaA = rnorm(nsynth, -6.5, 0.3)
-  ST = rnorm(nsynth, 0.5, 0.1)
-  EPSmax <- 0.1 + ST * 0.4
+  pores = rnorm(nsynth, 0.46, 0.1)
+  tort = rnorm(nsynth, 0.6, 0.1)
   
   #Solar radiation, here fixed
   Rs = 20.35
+  DIF.ratio = 1.004443
   
   #Isotope ratio constants
   RC.vpdb = 0.011237
@@ -355,12 +356,8 @@ sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, spre, esw){
   CQT_K <- CQT + 273
   
   #Convert pCO2 to units mol/cm^3
-  avo = 6.023e23  #mols per million molecules
-  v.million = 0.0821e6 * CQT_K / avo  #volume in L of 1 million molecules
-  #from ideal gas law; denom is pressure
-  #& should be func of elevation
-  v.million = v.million * 1000  #in /cm3
-  pCO2_mcc = pCO2 / (v.million * avo)  #mol/cm^3
+  pCO2_mcc = pCO2 / (0.08206 * CQT_K * 10^9)  #mol/cm^3
+  
   
   #Relative humidity, now beta distribution
   h_m <- 0.25 + 0.7 * (CQP / 900)
@@ -374,10 +371,10 @@ sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, spre, esw){
   #Precipitation O isotope ratios 
   dO_P_m <- -13.7 + 0.55 * (MAT + T_seas * spre)  #Relevant precip is spre % from CQ
   dO_P = rnorm(nsynth, dO_P_m, 1.7)
+  R_O_P = (dO_P / 1000 + 1) * RO.vsmow
   
   #Atmospheric vapor O isotope ratios
   A_atmP <- 2.71828 ^ ((5.9702e6 / CQT_K ^ 2 - 3.2801e4 / CQT_K + 52.227) / 1000)
-  R_O_P <- (dO_P / 1000 + 1) * RO.vsmow
   R_O_atm <- R_O_P / A_atmP
   dO_atm_m <- (R_O_atm / RO.vsmow - 1) * 1000
   dO_atm = rnorm(nsynth, dO_atm_m, 1)
@@ -393,13 +390,13 @@ sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, spre, esw){
   z_m <- z * 0.01
   
   #Respiration rate, now gamma dist
-  R_month_m <- 1.25 * exp(0.05452 * CQT) * CMP_cm / (12.7 + CMP_cm)  #Raich 2002, gC/m2day
+  R_month_m <- 1.25 * exp(0.05452 * CQT) * CMP_cm / (4.259 + CMP_cm)  #Raich 2002, gC/m2day
   theta = (R_month_m*0.5)^2/R_month_m #gamma scale parameter, using mean residual of 50% based on Raich validation data 
   k = R_month_m / theta #gamma shape parameter
   R_month = rgamma(nsynth, shape = k, scale = theta) #lets use gamma for these quants bounded at zero....
   R_month = R_month / (12.01 * 100^2)  #molC/cm2month
   R_sec <- R_month / (24 * 3600)  #molC/cm2s
-  R_sec = R_sec / L #molC/cm3s
+  R_sec = R_sec / L / pores #molC/cm3s
   
   #Potential ET
   ETP_D_m <- ifelse (RH < 50, 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50) * (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50))
@@ -413,13 +410,11 @@ sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, spre, esw){
   
   #Free air porosity
   #Have updated, now scales volumetrically w/ excess precipitation relative to pore space
-  EPS <- pmin((EPSmax - (CMP_mm - ETA)/(1000*EPSmax)), EPSmax)
-  EPS = pmax(EPS,0.01) #dimensionless
+  FAP <- pmin((pores - (CMP_mm - ETA)/(L*10*pores)), pores)
+  FAP = pmax(FAP,0.01) #dimensionless
   
-  #CO2 Diffusion coefficients
-  DIFC = EPS * 0.1369 * (CQT_K / 273.15) ^ 1.958
-  DIFC <- EPS * 0.14 #cm2/second  #removed tortuosity term
-  DIFC13 <- DIFC * (1 / 1.004443)
+  #CO2 Diffusion coefficient
+  DIFC = FAP * tort * 0.1369 * (CQT_K / 273.15) ^ 1.958
   
   #Water limitation of discriminaton, Diefendorf
   W_m <- 22.65 - (1.2 * (MAP + 975)) / (27.2 + 0.04 * (MAP + 975))
@@ -436,8 +431,8 @@ sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, spre, esw){
   deltaA_hat <- (deltaA / 1000 + 1) * RC.vpdb / (1 + RC.vpdb * (deltaA / 1000 + 1))
   deltaP_hat <- (deltaP / 1000 + 1) * RC.vpdb / (1 + RC.vpdb * (deltaP / 1000 + 1))
   dC_Soil.resp = R_sec/(DIFC) * (L * z - z^2 / 2)
-  dC_Soil.num = dC_Soil.resp * DIFC * deltaP_hat / DIFC13 + pCO2_mcc * deltaA_hat
-  dC_Soil.denom = dC_Soil.resp * (1 - DIFC * deltaP_hat / DIFC13) + pCO2_mcc * (1 - deltaA_hat)
+  dC_Soil.num = dC_Soil.resp * DIF.ratio * deltaP_hat + pCO2_mcc * deltaA_hat
+  dC_Soil.denom = dC_Soil.resp * (1 - DIF.ratio * deltaP_hat) + pCO2_mcc * (1 - deltaA_hat)
   dC_Soil = (dC_Soil.num / (dC_Soil.denom * RC.vpdb) - 1) * 1000
   
   #Soil carbonate C isotopes
@@ -456,8 +451,8 @@ sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, spre, esw){
   
   #Soil water diffusion evaporation balance
   E_s <- E / (1000 * 30 * 24 * 3600) #evaporation in m/sec
-  DIFO <- 1.637e-8 * (CQT_K / 216.25 - 1) ^ 2.074 * EPS
-  DIFO <- EPS * 2.3e-9   #m2/sec
+  DIFO <- 1.637e-8 * (CQT_K / 216.25 - 1) ^ 2.074 * FAP * tort  ##check these, why the 2 lines?
+  DIFO <- FAP * tort * 2.3e-9   #m2/sec	##also should this be pores or FAP?
   z_i <- DIFO / E_s #mean penitration depth of evap, in m
   
   #Soil water O isotopes
