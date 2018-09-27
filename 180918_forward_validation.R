@@ -116,7 +116,7 @@ abline(0,1)
 ######Now code to run some simulations
 nsynth = 5000
 
-sites = read.csv("valsites.csv")
+sites = read.csv("valsites_sel.csv")
 
 #read in real data
 data = read.xlsx("modern_comparison.xlsx", sheetIndex = 3)
@@ -149,7 +149,7 @@ abline(0,1)
 #run this for only the not superarid ones
 sites = read.csv("valsites_sel.csv")
 
-sites = sites[sites$map.wc > 200,]
+sites = sites[sites$map.wc > 100,]
 
 hq_pred = data.frame(depth=numeric(0), soil18O=numeric(0), d13C=numeric(0), d18O=numeric(0))
 for(i in 1: nrow(sites)){
@@ -297,7 +297,7 @@ sm_forward = function(MAP, MAT, P_seas, T_seas, pCO2){
 
 #This code was used for testing and making some validation plots...
 nsynth=5000
-sites = read.csv("valsites_sel.csv")
+sites = read.csv("valsites.sel.csv")
 data.comp = merge.data.frame(sites, data.aves, by.x = "Site", by.y = "Group.1")
 
 hq_pred = data.frame(d13C=numeric(0), d18O=numeric(0))
