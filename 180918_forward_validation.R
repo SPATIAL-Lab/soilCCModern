@@ -128,7 +128,7 @@ data.comp = merge.data.frame(sites, data.aves, by.x = "Site", by.y = "Group.1")
 
 ###This part runs only sites w/ clumpted data
 data.clump = data.comp[!is.na(data.comp$D47.measured),]
-for(i in 1:nrow(sites)){
+for(i in 1:nrow(data.clump)){
   if(is.na(data.clump$MAT[i])){data.clump$MAT[i] = data.clump$mat.wc[i]}
   if(is.na(data.clump$MAP[i])){data.clump$MAP[i] = data.clump$map.wc[i]}
 }
@@ -136,6 +136,15 @@ for(i in 1:nrow(sites)){
 clump_pred = data.frame(depth=numeric(0), soil18O=numeric(0), d13C=numeric(0), d18O=numeric(0))
 data.clump$Clumped_T = sqrt(0.0448e6 / (data.clump$D47.measured - 0.154)) - 273.15
 data.clump$Clumped.diff = data.clump$Clumped_T - data.clump$mat.wc
+data.clump$Clumped.offsetmean = (data.clump$hqt.offset + data.clump$dqt.offset) / 2
+data.clump$Clumped
+
+for(i in 1:nrow(data.clump)){
+  
+if(data.clump$Clumped.diff[i] > data.clump$Clumped.offsetmean[i]) {data.clump$Clumped.frac[i] = data.clump$hqp.frac[i]} 
+                              else {data.clump$Clumped.frac[i] = data.clump$dqp.frac[i]}
+}
+
 for(i in 1:nrow(data.clump)){
   clump_pred[i,] = sm_forward(data.clump$map.wc[i], data.clump$mat.wc[i], data.clump$dqp.frac[i], data.clump$Clumped.diff[i], 280)
   
@@ -199,7 +208,17 @@ abline(0,1)
 plot(dq.comp$d18O, dq.comp$d18O.measured)
 abline(0,1)
 
+## Calculate RMSE
 
+  C.residuals <- hq.comp$d13C.measured - hq.comp$d13C
+  O.residuals <- hq.comp$d18O.measured - hq.comp$d18O
+  
+  C.rmse <- mean(abs(C.residuals^2))
+  O.rmse <- mean(abs(O.residuals^2))
+
+  C.rmse
+  O.rmse
+  
 ############### Forward model function for use in sensitivity testing
 
 sm_forward = function(MAP, MAT, P_seas, T_seas, pCO2){
@@ -255,7 +274,7 @@ sm_forward = function(MAP, MAT, P_seas, T_seas, pCO2){
     z <- pmin(z, 100) 
     
     #Respiration rate, now gamma dist
-    R_day_m <- 1.24 * exp(0.055 * CQT) * CMP_cm / (4.87 + CMP_cm)  #Raich 2002, gC/m2day
+    R_day_m <- 1.25 * exp(0.0545 * CQT) * CMP_cm / (4.259 + CMP_cm)  #Raich 2002, gC/m2day
     theta = (R_day_m*0.5)^2/R_day_m #gamma scale parameter, using mean residual of 50% based on Raich validation data 
     k = R_day_m / theta #gamma shape parameter
     R_day = rgamma(nsynth, shape = k, scale = theta) #lets use gamma for these quants bounded at zero....
@@ -312,7 +331,7 @@ sm_forward = function(MAP, MAT, P_seas, T_seas, pCO2){
     dC_Carb <- (R_Carb / RC.vpdb - 1) * 1000
     dO_Carb <- (R_O_Carb / RO.vpdb - 1) * 1000
   
-    dat = c(median(z), median(dO_P), median(dC_Carb), median(dO_Carb))
+    dat = c(median(dC_Carb), median(dO_Carb))
   
   return(dat)
 }
