@@ -1,5 +1,7 @@
 ###Code for conducting validation of soil carbonate model
 
+setwd("~/GitHub/soilCCModern")
+
 #Prepare gridded climate data
 library(raster)
 
@@ -132,9 +134,10 @@ for(i in 1:nrow(sites)){
 }
 
 clump_pred = data.frame(depth=numeric(0), soil18O=numeric(0), d13C=numeric(0), d18O=numeric(0))
-data.clump$Clumped_T = sqrt(0.0422e6 / (data.clump$D47.measured - 0.215)) - 273.15
-for(i in 1:nrow(sites)){
-  clump_pred[i,] = sm_forward(data.clump$MAP[i], data.clump$MAT[i], data.clump$hqp.frac[i], data.clump$Clumped.T[i]-data.clump$MAT[i], 280)
+data.clump$Clumped_T = sqrt(0.0448e6 / (data.clump$D47.measured - 0.154)) - 273.15
+data.clump$Clumped.diff = data.clump$Clumped_T - data.clump$mat.wc
+for(i in 1:nrow(data.clump)){
+  clump_pred[i,] = sm_forward(data.clump$map.wc[i], data.clump$mat.wc[i], data.clump$dqp.frac[i], data.clump$Clumped.diff[i], 280)
   
 }
 clump_pred$Site = data.clump$Site
@@ -146,8 +149,23 @@ abline(0,1)
 plot(clump.comp$d18O, clump.comp$d18O.measured)
 abline(0,1)
 
+## Exclude hyperarid sites
+clump.comp.sel = subset(clump.comp, clump.comp$MAP > 100)
+plot(clump.comp.sel$d13C, clump.comp.sel$d13C.measured)
+abline(0,1)
+plot(clump.comp.sel$d18O, clump.comp.sel$d18O.measured)
+abline(0,1)
+
+## Respiration data subset into subhumid to arid
+
+srdb = read.csv("srdb-data.csv")
+srdb_carb <- subset(srdb, srdb$MAP < 760)
+
+
+##
 #run this for only the not superarid ones
 sites = read.csv("valsites_sel.csv")
+
 
 sites = sites[sites$map.wc > 100,]
 
@@ -165,7 +183,10 @@ for(i in 1: nrow(sites)){
 }
 dq_pred$Site = sites$Site
 
+
 #add it to the predictions and plot
+layout(matrix(c(1,2,3,4), 2, 2, byrow=T))
+
 hq.comp = merge.data.frame(hq_pred, data.aves, by.x = "Site", by.y = "Group.1", all.x=TRUE)
 plot(hq.comp$d13C, hq.comp$d13C.measured)
 abline(0,1)
@@ -178,13 +199,14 @@ abline(0,1)
 plot(dq.comp$d18O, dq.comp$d18O.measured)
 abline(0,1)
 
-###############Forward model function for use in sensitivity testing
+
+############### Forward model function for use in sensitivity testing
 
 sm_forward = function(MAP, MAT, P_seas, T_seas, pCO2){
 
     deltaA = rnorm(nsynth, -6.5, 0.3)
     pores = rnorm(nsynth, 0.46, 0.1)
-    tort = rnorm(nsynth, 0.6, 0.1)
+    tort = rnorm(nsynth, 0.7, 0.1)
     
     #Solar radiation, here fixed
     Rs = 20.35
@@ -218,7 +240,7 @@ sm_forward = function(MAP, MAT, P_seas, T_seas, pCO2){
     h = rbeta(nsynth, alpha, beta)
     RH <- h * 100
     
-    #Precipitation O isotope ratios 
+    # Precipitation O isotope ratios 
     dO_P_m <- -13.7 + 0.55 * MAT
     dO_P = rnorm(nsynth, dO_P_m, 1.7)
     R_O_P = (dO_P / 1000 + 1) * RO.vsmow
@@ -233,7 +255,7 @@ sm_forward = function(MAP, MAT, P_seas, T_seas, pCO2){
     z <- pmin(z, 100) 
     
     #Respiration rate, now gamma dist
-    R_day_m <- 1.25 * exp(0.05452 * CQT) * CMP_cm / (4.259 + CMP_cm)  #Raich 2002, gC/m2day
+    R_day_m <- 1.24 * exp(0.055 * CQT) * CMP_cm / (4.87 + CMP_cm)  #Raich 2002, gC/m2day
     theta = (R_day_m*0.5)^2/R_day_m #gamma scale parameter, using mean residual of 50% based on Raich validation data 
     k = R_day_m / theta #gamma shape parameter
     R_day = rgamma(nsynth, shape = k, scale = theta) #lets use gamma for these quants bounded at zero....
@@ -242,7 +264,7 @@ sm_forward = function(MAP, MAT, P_seas, T_seas, pCO2){
     R_sec = R_sec / L / pores #molC/cm3s
     
     #Potential ET
-    ETP_D_m <- ifelse (RH < 50, 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50) * (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50))
+    ETP_D_m <- ifelse (RH < 50, 0.0133 * (CQT / (CQT + 15)) * (1/23.885 * Rs + 50) * (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (1/23.885 * Rs + 50))
     ETP_D = rnorm(nsynth, ETP_D_m, 0.2)  #PET in mm/day, Turc 1961
     ETP_M <- ETP_D * 30  #mm/month
     
@@ -290,12 +312,13 @@ sm_forward = function(MAP, MAT, P_seas, T_seas, pCO2){
     dC_Carb <- (R_Carb / RC.vpdb - 1) * 1000
     dO_Carb <- (R_O_Carb / RO.vpdb - 1) * 1000
   
-    dat = c(median(dC_Carb), median(dO_Carb))
+    dat = c(median(z), median(dO_P), median(dC_Carb), median(dO_Carb))
   
   return(dat)
 }
 
-#This code was used for testing and making some validation plots...
+# This code was used for testing and making some validation plots...
+
 nsynth=5000
 sites = read.csv("valsites.sel.csv")
 data.comp = merge.data.frame(sites, data.aves, by.x = "Site", by.y = "Group.1")
@@ -399,7 +422,7 @@ sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, spre, esw){
   R_sec = R_sec / L / pores #molC/cm3s
   
   #Potential ET
-  ETP_D_m <- ifelse (RH < 50, 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50) * (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50))
+  ETP_D_m <- ifelse (RH < 50, 0.0133 * (CQT / (CQT + 15)) * (1/23.885 * Rs + 50) * (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (1/23.885 * Rs + 50))
   ETP_D = rnorm(nsynth, ETP_D_m, 0.2)  #PET in mm/day, Turc 1961
   ETP_M <- ETP_D * 30  #mm/month
   

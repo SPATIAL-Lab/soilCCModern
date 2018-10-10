@@ -38,18 +38,18 @@ library(R2jags)
 parameters = c("K", "Q", "F")
 set.seed(1395)
 
-d = read.csv("srdb-data.csv")
+d = srdb_carb
 d = d[!is.na(d$Rs_annual),]
 d = d[!is.na(d$MAP),]
 d = d[!is.na(d$MAT),]
-d = d[d$Ecosystem_state == "Natural"]
+d = subset(d, Ecosystem_state = "Natural" | "Unmanaged")
 d = d[d$Manipulation == "None",]
 
 rdat = list(P.m = d$MAP/120, Ta.m = d$MAT, Rs_ann = d$Rs_annual/365, nobs=nrow(d))
 
 rmod <- jags(model.file = textConnection(resp_mod), parameters.to.save = parameters, 
                   data = rdat, inits = NULL, 
-                  n.chains=3, n.iter = 5000, n.burnin = 100, n.thin = 5)
+                  n.chains=3, n.iter = 5000, n.burnin = 2500, n.thin = 5)
 
 rmod
 rmod.mcmc = as.mcmc(rmod)
