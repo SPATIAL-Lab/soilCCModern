@@ -126,23 +126,54 @@ data.aves = aggregate.data.frame(data, list(data$Site), mean, simplify = TRUE)
 data.aves$Site = NULL
 data.comp = merge.data.frame(sites, data.aves, by.x = "Site", by.y = "Group.1")
 
-###This part runs only sites w/ clumpted data
+### This part runs only sites w/ clumpted data
 data.clump = data.comp[!is.na(data.comp$D47.measured),]
 for(i in 1:nrow(data.clump)){
   if(is.na(data.clump$MAT[i])){data.clump$MAT[i] = data.clump$mat.wc[i]}
   if(is.na(data.clump$MAP[i])){data.clump$MAP[i] = data.clump$map.wc[i]}
 }
 
-clump_pred = data.frame(depth=numeric(0), soil18O=numeric(0), d13C=numeric(0), d18O=numeric(0))
-data.clump$Clumped_T = sqrt(0.0448e6 / (data.clump$D47.measured - 0.154)) - 273.15
+clump_pred_meantemp = data.frame(depth=numeric(0), soil18O=numeric(0), d13C=numeric(0), d18O=numeric(0))
+
+## Calibration curve of Dennis et. al. (2011), recalculated Ghosh (2006)
+data.clump$Clumped_T = sqrt(0.0636e6 / (data.clump$D47.measured + 0.0047)) - 273.15 
+
+## Is the clumped temperature closer to hqt or dqt?
 data.clump$Clumped.diff = data.clump$Clumped_T - data.clump$mat.wc
 data.clump$Clumped.offsetmean = (data.clump$hqt.offset + data.clump$dqt.offset) / 2
 
+
 for(i in 1:nrow(data.clump)){
   
-if(data.clump$Clumped.diff[i] > data.clump$Clumped.offsetmean[i]) {data.clump$Clumped.frac[i] = data.clump$hqp.frac[i]} 
-                              else {data.clump$Clumped.frac[i] = data.clump$dqp.frac[i]}
+if(data.clump$Clumped.diff[i] > data.clump$Clumped.offsetmean[i]) {
+                              data.clump$Clumped.frac[i] = data.clump$hqp.frac[i] 
+                              data.clump$Informed.offset[i] = data.clump$hqt.offset[i]} 
+                              else {
+                              data.clump$Clumped.frac[i] = data.clump$dqp.frac[i] 
+                              data.clump$Informed.offset[i] = data.clump$dqt.offset[i]}
+  }
+
+data.clump$Informed.Temp = data.clump$Informed.offset + data.clump$mat.wc
+
+## Running it in the forward model - mean temperature in the "informed by clumped" quarter
+for(i in 1:nrow(data.clump)){
+  clump_pred_meantemp[i,] = sm_forward(data.clump$map.wc[i], data.clump$mat.wc[i], data.clump$Clumped.frac[i], data.clump$Informed.offset[i], 280)
+  
 }
+clump_pred_meantemp$Site = data.clump$Site
+
+# Add it to the predictions and plot
+clump.comp.meantemp = merge.data.frame(clump_pred_meantemp, data.clump, by.x = "Site", by.y = "Site", all.x=TRUE)
+
+layout(matrix(c(1,2), 1, 2, byrow=T))
+plot(clump.comp.meantemp$d13C, clump.comp.meantemp$d13C.measured, xlim=c(-14,0), ylim=c(-14,0), main="Using Informed Mean Temperature")
+abline(0,1)
+
+plot(clump.comp.meantemp$d18O, clump.comp.meantemp$d18O.measured, xlim=c(-16,-1), ylim=c(-16,-1))
+abline(0,1)
+
+## Running it in the forward model - using clumped temperature as the mean quarter temperature
+clump_pred = data.frame(depth=numeric(0), soil18O=numeric(0), d13C=numeric(0), d18O=numeric(0))
 
 for(i in 1:nrow(data.clump)){
   clump_pred[i,] = sm_forward(data.clump$map.wc[i], data.clump$mat.wc[i], data.clump$Clumped.frac[i], data.clump$Clumped.diff[i], 280)
@@ -150,11 +181,26 @@ for(i in 1:nrow(data.clump)){
 }
 clump_pred$Site = data.clump$Site
 
-#add it to the predictions and plot
+# Add it to the predictions and plot
 clump.comp = merge.data.frame(clump_pred, data.clump, by.x = "Site", by.y = "Site", all.x=TRUE)
-plot(clump.comp$d13C, clump.comp$d13C.measured)
+
+layout(matrix(c(1,2), 1, 2, byrow=T))
+plot(clump.comp$d13C, clump.comp$d13C.measured, xlim=c(-14,0), ylim=c(-14,0), main="Using Clumped Temperature Directly")
 abline(0,1)
-plot(clump.comp$d18O, clump.comp$d18O.measured)
+
+plot(clump.comp$d18O, clump.comp$d18O.measured, xlim=c(-16,-1), ylim=c(-16,-1))
+abline(0,1)
+
+
+
+layout(matrix(c(1,2,3), 1, 3, byrow=T))
+plot(clump.comp.meantemp$Informed.Temp, clump.comp.meantemp$Clumped_T, ylim = c(0,50), xlim=c(0,50), xlab="Informed Mean Temperature (C)", ylab="Clumped Temperature (C)")
+abline(0,1)
+
+plot(clump.comp.meantemp$mat.wc + clump.comp.meantemp$hqt.offset, clump.comp.meantemp$Clumped_T, ylim = c(0,50), xlim=c(0,50), xlab="Hot Quarter Temperature (C)", ylab="Clumped Temperature (C)")
+abline(0,1)
+
+plot(clump.comp.meantemp$mat.wc + clump.comp.meantemp$dqt.offset, clump.comp.meantemp$Clumped_T, ylim = c(0,50), xlim=c(0,50), xlab="Dry Quarter Temperature (C)", ylab="Clumped Temperature (C)")
 abline(0,1)
 
 ## Exclude hyperarid sites
@@ -274,6 +320,7 @@ sm_forward = function(MAP, MAT, P_seas, T_seas, pCO2){
     
     #Respiration rate, now gamma dist
     R_day_m <- 1.25 * exp(0.0545 * CQT) * CMP_cm / (4.259 + CMP_cm)  #Raich 2002, gC/m2day
+    R_day_m <- 1.24 * exp(0.055 * CQT) * CMP_cm / (4.78 + CMP_cm)
     theta = (R_day_m*0.5)^2/R_day_m #gamma scale parameter, using mean residual of 50% based on Raich validation data 
     k = R_day_m / theta #gamma shape parameter
     R_day = rgamma(nsynth, shape = k, scale = theta) #lets use gamma for these quants bounded at zero....
@@ -713,12 +760,3 @@ for(j in 1:nrow(parms)){
 
 View(parms)
 plot(parms$rr ~ parms$rmse)
-rmses = matrix(parms$rmse, 20, 20)
-rmses = rmses[c(20:1),]
-rmses.rast = raster(rmses, xmn=0.05, xmx=1.05, ymn=0.05, ymx=1.05)
-
-jpeg("O_opt.jpg", res=300, units="in", width = 5.7, height = 5)
-par(mai=c(1.05, 0.9, 0.6, 0.8))
-plot(rmses.rast, xlab="% seasonal rainfall", ylab="% evaporated water")  #now need to make a nice plot...
-mtext("RMSE, per mil", 4, line=1.9)
-dev.off()
