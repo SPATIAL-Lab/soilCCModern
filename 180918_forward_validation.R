@@ -135,8 +135,8 @@ for(i in 1:nrow(data.clump)){
 
 clump_pred_meantemp = data.frame(depth=numeric(0), soil18O=numeric(0), d13C=numeric(0), d18O=numeric(0))
 
-## Calibration curve of Dennis et. al. (2011), recalculated Ghosh (2006)
-data.clump$Clumped_T = sqrt(0.0636e6 / (data.clump$D47.measured + 0.0047)) - 273.15 
+## Calibration curve of Kelson et. al. 2017
+data.clump$Clumped_T = sqrt(0.0422e6 / (data.clump$D47.measured - 0.215)) - 273.15 
 
 ## Is the clumped temperature closer to hqt or dqt?
 data.clump$Clumped.diff = data.clump$Clumped_T - data.clump$mat.wc
@@ -163,13 +163,27 @@ for(i in 1:nrow(data.clump)){
 clump_pred_meantemp$Site = data.clump$Site
 
 # Add it to the predictions and plot
+
 clump.comp.meantemp = merge.data.frame(clump_pred_meantemp, data.clump, by.x = "Site", by.y = "Site", all.x=TRUE)
 
-layout(matrix(c(1,2), 1, 2, byrow=T))
-plot(clump.comp.meantemp$d13C, clump.comp.meantemp$d13C.measured, xlim=c(-14,0), ylim=c(-14,0), main="Using Informed Mean Temperature")
-abline(0,1)
+c = ceiling((clump.comp.meantemp$map.wc / max(clump.comp.meantemp$map.wc)) * 5)
 
-plot(clump.comp.meantemp$d18O, clump.comp.meantemp$d18O.measured, xlim=c(-16,-1), ylim=c(-16,-1))
+pal = rainbow(5)
+
+layout(matrix(c(1,2), 1, 2, byrow=T))
+
+plot(clump.comp.meantemp$d13C, clump.comp.meantemp$d13C.measured, pch=16, col=pal[c], xlim=c(-14,0), ylim=c(-14,0), main="Using Informed Mean Temperature",
+     xlab=expression(paste("Predicted ",delta^{13}, "C (\u2030)")),
+     ylab=expression(paste("Observed ",delta^{13}, "C (\u2030)")))
+points(clump.comp.meantemp$d13C, clump.comp.meantemp$d13C.measured, pch=1)
+abline(0,1)
+legend("bottomright", title = "MAP (mm)", fill=rainbow(5), legend=c("0 - 136", "136 - 272", "272 - 408" , "408 - 544", "544 - 680"))
+
+
+plot(clump.comp.meantemp$d18O, clump.comp.meantemp$d18O.measured, pch=16, col=pal[c], xlim=c(-16,0), ylim=c(-16,0),
+     xlab=expression(paste("Predicted ",delta^{18}, "O (\u2030)")),
+     ylab=expression(paste("Observed ",delta^{18}, "O (\u2030)")))
+points(clump.comp.meantemp$d18O, clump.comp.meantemp$d18O.measured, pch=1)
 abline(0,1)
 
 ## Running it in the forward model - using clumped temperature as the mean quarter temperature
@@ -194,13 +208,13 @@ abline(0,1)
 
 
 layout(matrix(c(1,2,3), 1, 3, byrow=T))
-plot(clump.comp.meantemp$Informed.Temp, clump.comp.meantemp$Clumped_T, ylim = c(0,50), xlim=c(0,50), xlab="Informed Mean Temperature (C)", ylab="Clumped Temperature (C)")
+plot(clump.comp.meantemp$Informed.Temp, clump.comp.meantemp$Clumped_T, ylim = c(0,56), xlim=c(0,56), xlab="Informed Mean Temperature (C)", ylab="Clumped Temperature (C)")
 abline(0,1)
 
-plot(clump.comp.meantemp$mat.wc + clump.comp.meantemp$hqt.offset, clump.comp.meantemp$Clumped_T, ylim = c(0,50), xlim=c(0,50), xlab="Hot Quarter Temperature (C)", ylab="Clumped Temperature (C)")
+plot(clump.comp.meantemp$mat.wc + clump.comp.meantemp$hqt.offset, clump.comp.meantemp$Clumped_T, ylim = c(0,56), xlim=c(0,56), xlab="Hot Quarter Temperature (C)", ylab="Clumped Temperature (C)")
 abline(0,1)
 
-plot(clump.comp.meantemp$mat.wc + clump.comp.meantemp$dqt.offset, clump.comp.meantemp$Clumped_T, ylim = c(0,50), xlim=c(0,50), xlab="Dry Quarter Temperature (C)", ylab="Clumped Temperature (C)")
+plot(clump.comp.meantemp$mat.wc + clump.comp.meantemp$dqt.offset, clump.comp.meantemp$Clumped_T, ylim = c(0,56), xlim=c(0,56), xlab="Dry Quarter Temperature (C)", ylab="Clumped Temperature (C)")
 abline(0,1)
 
 ## Exclude hyperarid sites
@@ -320,7 +334,7 @@ sm_forward = function(MAP, MAT, P_seas, T_seas, pCO2){
     
     #Respiration rate, now gamma dist
     R_day_m <- 1.25 * exp(0.0545 * CQT) * CMP_cm / (4.259 + CMP_cm)  #Raich 2002, gC/m2day
-    R_day_m <- 1.24 * exp(0.055 * CQT) * CMP_cm / (4.78 + CMP_cm)
+    R_day_m <- 1.24 * exp(0.055 * CQT) * CMP_cm / (4.78 + CMP_cm) # Re-parameterized to MAP < 760, switch equations for comparison
     theta = (R_day_m*0.5)^2/R_day_m #gamma scale parameter, using mean residual of 50% based on Raich validation data 
     k = R_day_m / theta #gamma shape parameter
     R_day = rgamma(nsynth, shape = k, scale = theta) #lets use gamma for these quants bounded at zero....
@@ -395,25 +409,46 @@ for(i in 1: nrow(sites)){
 hq_pred$Site = data.comp$Site
 
 hq.comp = merge.data.frame(hq_pred, data.comp, by.x = "Site", by.y = "Site", all.x=TRUE)
+dq.comp = merge.data.frame(dq_pred, data.comp, by.x = "Site", by.y = "Site", all.x=TRUE)
 
 c = ceiling((hq.comp$map.wc) / max(hq.comp$map.wc) * 6)
 pal = rainbow(6)
 
 jpeg("validation.jpg", res=300, units="in", width = 10, height = 5)
-layout(matrix(c(1,2), 1, 2, byrow = TRUE))
-par(mar=c(5,5,1,1))
-plot(hq.comp$d13C, hq.comp$d13C.measured, pch=16, col=pal[c], 
-     xlab=expression(paste("Predicted ",delta^{13}, "C (\u2030)")),
-     ylab=expression(paste("Observed ",delta^{13}, "C (\u2030)")))
-points(hq.comp$d13C[hq.comp$map.wc>100], hq.comp$d13C.measured[hq.comp$map.wc>100], pch=1)
-abline(0,1)
-
 plot(hq.comp$d18O, hq.comp$d18O.measured, pch=16, col=pal[c],
      xlab=expression(paste("Predicted ",delta^{18}, "O (\u2030)")),
      ylab=expression(paste("Observed ",delta^{18}, "O (\u2030)")))
 points(hq.comp$d18O[hq.comp$map.wc>100], hq.comp$d18O.measured[hq.comp$map.wc>100], pch=1)
 abline(0,1)
 dev.off()
+
+layout(matrix(c(1,2,3,4), 2, 2, byrow = TRUE))
+par(mar=c(5,5,1,1))
+plot(hq.comp$d13C, hq.comp$d13C.measured, pch=16, col=pal[c], 
+     xlab=expression(paste("Predicted ",delta^{13}, "C (\u2030)")),
+     ylab=expression(paste("Observed ",delta^{13}, "C (\u2030)")))
+points(hq.comp$d13C[hq.comp$map.wc>100], hq.comp$d13C.measured[hq.comp$map.wc>100], pch=1)
+abline(0,1)
+legend("bottomright", title = "MAP (mm)", fill=rainbow(6), legend=c("100 - 122", "122 - 244", "244 - 366" , "366 - 488", "488 - 600", "600 - 722"))
+
+plot(hq.comp$d18O, hq.comp$d18O.measured, pch=16, col=pal[c],
+     xlab=expression(paste("Predicted ",delta^{18}, "O (\u2030)")),
+     ylab=expression(paste("Observed ",delta^{18}, "O (\u2030)")))
+points(hq.comp$d18O[hq.comp$map.wc>100], hq.comp$d18O.measured[hq.comp$map.wc>100], pch=1)
+abline(0,1)
+
+par(mar=c(5,5,1,1))
+plot(dq.comp$d13C, dq.comp$d13C.measured, pch=16, col=pal[c], 
+     xlab=expression(paste("Predicted ",delta^{13}, "C (\u2030)")),
+     ylab=expression(paste("Observed ",delta^{13}, "C (\u2030)")))
+points(dq.comp$d13C[dq.comp$map.wc>100], dq.comp$d13C.measured[dq.comp$map.wc>100], pch=1)
+abline(0,1)
+
+plot(dq.comp$d18O, dq.comp$d18O.measured, pch=16, col=pal[c],
+     xlab=expression(paste("Predicted ",delta^{18}, "O (\u2030)")),
+     ylab=expression(paste("Observed ",delta^{18}, "O (\u2030)")))
+points(dq.comp$d18O[dq.comp$map.wc>100], dq.comp$d18O.measured[dq.comp$map.wc>100], pch=1)
+abline(0,1)
 
 ###############Forward model function for use in sensitivity testing
 
@@ -744,6 +779,8 @@ rr
 
 parms = data.frame(rr = rr, rmse = numeric(400))
 
+## All sites
+
 for(j in 1:nrow(parms)){
   opt = numeric()
   for(i in 1: nrow(sites)){
@@ -759,4 +796,25 @@ for(j in 1:nrow(parms)){
 }
 
 View(parms)
-plot(parms$rr ~ parms$rmse)
+plot(parms$rr ~ parms$rmse, main = "All Data Respiration Optimization", ylab = "Fraction of Estimated Respiration", xlab = "RMSE")
+
+## Only clumped sites
+
+parms = data.frame(rr = rr, rmse = numeric(400))
+
+for(j in 1:nrow(parms)){
+  opt = numeric()
+  for(i in 1: nrow(clump.comp.meantemp)){
+    opt[i] = sm_optimizer_r(clump.comp.meantemp$map.wc[i], clump.comp.meantemp$mat.wc[i], clump.comp.meantemp$Clumped.frac[i], clump.comp.meantemp$Informed.offset[i], 280, parms$rr[j])
+  }
+  
+  opt = data.frame(Site = clump.comp.meantemp$Site, d13C = opt)
+  opt = merge.data.frame(opt, data.comp, by.x = "Site", by.y = "Site", all.x=TRUE)
+  
+  mse = (opt$d13C - opt$d13C.measured)^2
+  mse = mean(mse)
+  parms$rmse[j] = sqrt(mse)
+}
+
+View(parms)
+plot(parms$rr ~ parms$rmse, main = "Clumped Data Respiration Optimization", ylab = "Fraction of Estimated Respiration", xlab = "RMSE")
