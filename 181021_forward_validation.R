@@ -577,9 +577,9 @@ sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, spre, esw){
   
   #Soil water diffusion evaporation balance
   E_s <- E / (1000 * 30 * 24 * 3600) #evaporation in m/sec
-  DIFO <- 1.637e-8 * (CQT_K / 216.25 - 1) ^ 2.074 * FAP * tort  ##check these, why the 2 lines?
-  DIFO <- FAP * tort * 2.3e-9   #m2/sec	##also should this be pores or FAP?
-  z_i <- DIFO / E_s #mean penitration depth of evap, in m
+  DIFO <- 1.637e-8 * (CQT_K / 216.25 - 1) ^ 2.074 * (pores - FAP) * tort   ## should be soil water fraction, 
+  ## pores - FAP. units: m2/sec. However, the the paper assumes total saturation, where FAP = 0
+  z_i <- DIFO / E_s #mean penetration depth of evap, in m
   
   #Soil water O isotopes
   DRF <- 1 + 0.8 * (1 / 0.9723 - 1)
