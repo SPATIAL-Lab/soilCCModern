@@ -141,6 +141,12 @@ data.clump$Clumped_T = sqrt(0.0422e6 / (data.clump$D47.measured - 0.1262)) - 273
 ## Calibration curve of Kelson et. al. 2017
 data.clump$Clumped_T = sqrt(0.0422e6 / (data.clump$D47.measured - 0.215)) - 273.15 
 
+## Calibration curve of Ghosh 2006, recalibrated by Dennis 2011
+data.clump$Clumped_T = sqrt(0.0636e6 / (data.clump$D47.measured + 0.0047)) - 273.15 
+
+## Calibration curve of Dennis and Schrag 2010, recalibrated by Dennis 2011
+data.clump$Clumped_T = sqrt(0.0362e6 / (data.clump$D47.measured - 0.292)) - 273.15 
+
 ## Is the clumped temperature closer to hqt or dqt?
 data.clump$Clumped.diff = data.clump$Clumped_T - data.clump$mat.wc
 data.clump$Clumped.offsetmean = (data.clump$hqt.offset + data.clump$dqt.offset) / 2
