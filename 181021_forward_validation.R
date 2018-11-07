@@ -84,8 +84,9 @@ setwd("C:/Users/gjbowen/Dropbox/HypoMirror/soilCCModern/")
 library(xlsx)
 
 #extract relevant values at sites
-sites = read.xlsx("modern_comparison.xlsx", sheetIndex = 1)
-coords = matrix(c(sites$Lon, sites$Lat),nrow(sites),2)
+rawsites = read.xlsx("modern_comparison.xlsx", sheetIndex = 3)
+sites = read.xlsx("modern_comparison_raw.xlsx", sheetIndex = 1)
+coords = matrix(c(sites$Lon, sites$Lat), nrow(sites), 2)
 sites$mat.wc = extract(mat, coords)
 sites$map.wc = extract(map, coords)
 sites$hqt.offset = extract(hqt.offset, coords)
@@ -251,6 +252,14 @@ abline(0,1)
 srdb = read.csv("srdb-data.csv")
 srdb_carb <- subset(srdb, srdb$MAP < 300)
 
+## Subset of sites that have depth information - matching them with the depth that is closest (w/in 10 cm) of the model estimated depths
+depth = data.frame(site=numeric(0), depthM = numeric(0), depthObs = numeric(0), d13CD = numeric(0), d18OD = numeric(0))
+for(i in 1:nrow(hq.comp)) {
+  for(j in 1:nrow(rawsites)){
+if(identical(as.character(hq.comp[i,1]), as.character(rawsites[j,2])) && is.na(rawsites[j,3]) == F && hq.comp[i,2] > rawsites[j,3] - 10 && hq.comp[i,2] < rawsites[j,3] + 10) 
+{depthCO = data.frame(site=rawsites[j,2], depthM = hq.comp[i,2], depthObs = rawsites[j,3], d13C_measured=rawsites[j,4], d18O_measured=rawsites[j,5])
+depth = rbind(depth, depthCO)}
+  }}
 
 ##
 #run this for only the not superarid ones
@@ -274,7 +283,7 @@ for(i in 1: nrow(sites)){
 dq_pred$Site = sites$Site
 
 ## w/ evap
-hq_pred = data.frame(depth=numeric(0), soil18O=numeric(0), d13C=numeric(0), d18O=numeric(0))
+hq_pred = data.frame(depth=numeric(0), soil18O=numeric(0), dO_P=numeric(0), d13C=numeric(0), d18O=numeric(0))
 for(i in 1: nrow(sites)){
   hq_pred[i,] = sm_forward_evap(sites$map.wc[i], sites$mat.wc[i], sites$hqp.frac[i], sites$hqt.offset[i], 280)
   
@@ -413,6 +422,8 @@ sm_forward = function(MAP, MAT, P_seas, T_seas, pCO2){
     R_day = R_day / (12.01 * 100^2)  #molC/cm2day
     R_sec <- R_day / (24 * 3600)  #molC/cm2s
     R_sec = R_sec / L / pores #molC/cm3s
+    
+    #
     
     #Potential ET
     ETP_D_m <- ifelse (RH < 50, 0.0133 * (CQT / (CQT + 15)) * (1/23.885 * Rs + 50) * (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (1/23.885 * Rs + 50))
@@ -603,7 +614,7 @@ sm_forward_evap = function(MAP, MAT, P_seas, T_seas, pCO2){
   dC_Carb <- (R_Carb / RC.vpdb - 1) * 1000
   dO_Carb <- (R_O_Carb / RO.vpdb - 1) * 1000
   
-  dat = c(median(dC_Carb), median(dO_Carb))
+  dat = c(median(z), median(dO_soil), median(dO_P), median(dC_Carb), median(dO_Carb))
   
   return(dat)
 }
