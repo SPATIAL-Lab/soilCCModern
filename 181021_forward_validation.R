@@ -260,6 +260,45 @@ if(identical(as.character(hq.comp[i,1]), as.character(rawsites[j,2])) && is.na(r
 {depthCO = data.frame(site=rawsites[j,2], depthM = hq.comp[i,2], depthObs = rawsites[j,3], d13C_measured=rawsites[j,4], d18O_measured=rawsites[j,5])
 depth = rbind(depth, depthCO)}
   }}
+## Average each site
+depth.aves = aggregate.data.frame(depth, list(depth$site), mean, simplify = TRUE)
+depth.aves$site=NULL
+# Add other data
+sites.depth <- merge.data.frame(depth.aves, sites, by.x = "Group.1", by.y = "Site")
+
+## Run fw model for only depth sites - hq and dq w. evap
+
+## w/ evap
+hq_pred.depth = data.frame(depth=numeric(0), soil18O=numeric(0), dO_P=numeric(0), d13C=numeric(0), d18O=numeric(0))
+for(i in 1: nrow(sites.depth)){
+  hq_pred.depth[i,] = sm_forward_evap(sites.depth$map.wc[i], sites.depth$mat.wc[i], sites.depth$hqp.frac[i], sites.depth$hqt.offset[i], 280)
+  
+}
+hq_pred.depth$Site = sites.depth$Group.1
+
+dq_pred.depth = data.frame(depth=numeric(0), soil18O=numeric(0), dO_P=numeric(0),d13C=numeric(0), d18O=numeric(0))
+for(i in 1: nrow(sites.depth)){
+  dq_pred.depth[i,] = sm_forward_evap(sites.depth$map.wc[i], sites.depth$mat.wc[i], sites.depth$dqp.frac[i], sites.depth$dqt.offset[i], 280)
+  
+}
+dq_pred.depth$Site = sites.depth$Group.1
+
+
+layout(matrix(c(1,2,3,4), 2, 2, byrow=T))
+
+hq.comp.depth = merge.data.frame(hq_pred.depth, sites.depth, by.x = "Site", by.y = "Group.1", all.x=TRUE)
+plot(hq.comp.depth$d13C, hq.comp.depth$d13C_measured)
+abline(0,1)
+plot(hq.comp.depth$d18O, hq.comp.depth$d18O_measured)
+abline(0,1)
+
+dq.comp.depth = merge.data.frame(dq_pred.depth, sites.depth, by.x = "Site", by.y = "Group.1")
+plot(dq.comp.depth$d13C, dq.comp.depth$d13C_measured)
+abline(0,1)
+plot(dq.comp.depth$d18O, dq.comp.depth$d18O_measured)
+abline(0,1)
+
+# Same results as the overall averages w/o depth
 
 ##
 #run this for only the not superarid ones
