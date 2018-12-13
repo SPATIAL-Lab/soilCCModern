@@ -4,20 +4,28 @@ setwd("~/GitHub/soilCCModern")
 
 #Prepare gridded climate data
 library(raster)
-
+library(rgdal)
 #read in worldclim 2.5min mean temperature grids, downloaded 9-18-18
-setwd("C:/Users/gjbowen/Dropbox/Archived/ArcGIS/worldclim/")
+setwd("C:/Users/femal/Dropbox/worldclim/")
 files = list.files(pattern="wc2.0_2.5m_tavg*")
 mtemp = stack(files)
 mat = mean(mtemp)
 writeRaster(mat, "wc2.0_2.5m_tavg_ma.tif")
 plot(mat)
 
+mat = list.files(pattern="wc2.0_2.5m_tavg_ma.tif")
+mat = stack(mat)
+
 #now make quarterly seasonal averages
 qtemp = stack(mean(subset(mtemp, c(12,1,2))), 
               mean(subset(mtemp, 3:5)), 
               mean(subset(mtemp, 6:8)), 
               mean(subset(mtemp, 9:11)))
+
+qtemp_djf = stack(mean(subset(mtemp, c(12,1,2))))
+qtemp_mam = stack(mean(subset(mtemp, c(3:5))))
+qtemp_jja = stack(mean(subset(mtemp, c(6:8))))
+qtemp_son = stack(mean(subset(mtemp, c(9:11))))
 
 #find the hottest quarter
 hotq = which.max(qtemp)
@@ -37,7 +45,7 @@ qprec = stack(sum(subset(mprec, c(12,1,2))),
               sum(subset(mprec, 9:11)))
 
 #find the driest quarter
-dryq = which.min(qprec)
+dryq = subset(qprec, min(layer))
 plot(dryq)
 
 #now pull hot quarter temps into a single raster
@@ -45,6 +53,10 @@ hqt = max(qtemp)
 plot(hqt)
 
 #this is what that would look like as tseas
+djf.offset = qtemp_djf - mat
+mam.offset = qtemp_mam - mat
+jja.offset = qtemp_jja - mat
+son.offset = qtemp_son - mat
 hqt.offset = hqt - mat
 plot(hqt.offset)
 
@@ -77,6 +89,11 @@ plot(dqp)
 dqp.frac = dqp/map
 plot(dqp.frac)
 
+
+### To remove raster objects once done with them (they are large and will slow down other processes)
+rm(list=ls()[grep("qtemp",ls())])
+rm(list=ls()[grep("offset",ls())])
+
 #####That's all the grid processing - next bit needs only be run once after data are updated
 
 #read in the compiled data
@@ -106,6 +123,28 @@ sites$hqt.offset = extract(hqt.offset, coords)
 sites$hqp.frac = extract(hqp.frac, coords)
 sites$dqt.offset = extract(dqt.offset, coords)
 sites$dqp.frac = extract(dqp.frac, coords)
+sites$djf.offset = extract(djf.offset, coords)
+sites$mam.offset = extract(mam.offset, coords)
+sites$jja.offset = extract(jja.offset, coords)
+sites$son.offset = extract(son.offset, coords)
+
+
+### Record which quarter is dry quarter. Change southern hemisphere sites to jja = summer, ect... 
+
+for (i in  1:nrow(sites)){
+sites$DQ =  ifelse(almost.equal(sites$djf.offset, sites$dqt.offset, 1e-5), "djf", 
+                   ifelse(almost.equal(sites$mam.offset, sites$dqt.offset, 1e-5), "mam",
+                          ifelse(almost.equal(sites$son.offset, sites$dqt.offset, 1e-5), "son", "jja")))
+  
+
+}
+
+for (i in 1:nrow(precipcomp)){
+precipcomp[i,"d18O_OIPC_mam"] <- mean(c(precipcomp[i,"d18O_OIPC_mar"],precipcomp[i,"d18O_OIPC_apr"],precipcomp[i,"d18O_OIPC_may"]))
+precipcomp[i,"d18O_OIPC_jja"] <- mean(c(precipcomp[i,"d18O_OIPC_jun"],precipcomp[i,"d18O_OIPC_jul"],precipcomp[i,"d18O_OIPC_aug"]))
+precipcomp[i,"d18O_OIPC_son"] <- mean(c(precipcomp[i,"d18O_OIPC_sep"],precipcomp[i,"d18O_OIPC_oct"],precipcomp[i,"d18O_OIPC_nov"]))
+precipcomp[i,"d18O_OIPC_djf"] <- mean(c(precipcomp[i,"d18O_OIPC_dec"],precipcomp[i,"d18O_OIPC_jan"],precipcomp[i,"d18O_OIPC_feb"]))
+}
 
 write.csv(sites, "valsites_sel.csv")
 
@@ -129,292 +168,31 @@ data.aves$Site = NULL
 data.comp = merge.data.frame(sites, data.aves, by.x = "Site", by.y = "Group.1")
 
 ## Compare dO_P from OIPC and model
-precipcomp <- merge.data.frame(precipcomp, hq.comp, by.x="Site", by.y="Site")
 
-c = ceiling((precipcomp$map.wc.y / max(precipcomp$map.wc.y)) * 5)
-
-pal = rainbow(5)
-
-layout(matrix(c(1,2,3,4,5,6), 2, 3, byrow=T))
-
-plot(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_ann, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC Ann",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Model Ann",delta^{18}, "O (\u2030)")))
-points(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_ann, pch=1)
-abline(0,1)
-legend("bottomright", title = "MAP (mm)", fill=rainbow(5), legend=c("0 - 147", "147 - 294","294 - 441", "441 - 588" , "588 - 737"))
-
-plot(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_jja, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC JJA",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Model Ann",delta^{18}, "O (\u2030)")))
-points(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_jja, pch=1)
-abline(0,1)
-
-plot(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_mam, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC MAM",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Model Ann",delta^{18}, "O (\u2030)")))
-points(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_mam, pch=1)
-abline(0,1)
-
-plot(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_son, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC SON",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Model Ann",delta^{18}, "O (\u2030)")))
-points(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_son, pch=1)
-abline(0,1)
-
-plot(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_djf, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC DJF",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Model Ann",delta^{18}, "O (\u2030)")))
-points(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_djf, pch=1)
-abline(0,1)
-
-
-plot(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_son, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC SON",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Model Ann",delta^{18}, "O (\u2030)")))
-points(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_son, pch=1)
-abline(0,1)
-
-
-### Compare measured d18O carbonate (w/ no evap) in HQ and DQ temps to OIPC d18O precip
-
-plot(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_djf, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC DJF ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure HQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_djf, pch=1)
-abline(0,1)
-legend("bottomright", title = "MAP (mm)", fill=rainbow(5), legend=c("0 - 147", "147 - 294","294 - 441", "441 - 588" , "588 - 737"))
-
-
-plot(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_jja, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC JJA ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure HQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_jja, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_mam, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC MAM ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure HQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_mam, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_son, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC SON ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure HQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_son, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_ann, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC Ann ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure HQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_ann, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_Model_ann, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("Model Ann ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure HQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_Model_ann, pch=1)
-abline(0,1)
-
-
-## DQ
-plot(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_djf, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC DJF ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure DQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_djf, pch=1)
-abline(0,1)
-legend("bottomright", title = "MAP (mm)", fill=rainbow(5), legend=c("0 - 147", "147 - 294","294 - 441", "441 - 588" , "588 - 737"))
-
-
-plot(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_jja, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC JJA ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure DQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_jja, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_mam, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC MAM ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure DQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_mam, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_son, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC SON ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure DQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_son, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_ann, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC Ann ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure DQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_ann, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_Model_ann, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("Model Ann ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure DQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_Model_ann, pch=1)
-abline(0,1)
-
-## HQ Vs DQ dO_P
-plot(precipcomp$dO_P_carb_dq ~ precipcomp$dO_P_carb_hq, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("Measure HQ ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure DQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_dq ~ precipcomp$dO_P_carb_hq, pch=1)
-abline(0,1)
-legend("bottomright", title = "MAP (mm)", fill=rainbow(5), legend=c("0 - 147", "147 - 294","294 - 441", "441 - 588" , "588 - 737"))
-
-
-c = ceiling((precipcomp$Alt.y / max(precipcomp$Alt.y)) * 5)
-
-pal = rainbow(5)
-
-layout(matrix(c(1,2,3,4,5,6), 2, 3, byrow=T))
-
-plot(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_ann, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC Ann",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Model Ann",delta^{18}, "O (\u2030)")))
-points(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_ann, pch=1)
-abline(0,1)
-legend("bottomright", title = "Alt (m)", fill=rainbow(5), legend=c("0 - 500", "500 - 1000","1000 - 1500", "1500 - 2000" , "2000 - 2500"))
-
-plot(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_jja, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC JJA",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Model Ann",delta^{18}, "O (\u2030)")))
-points(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_jja, pch=1)
-abline(0,1)
-
-plot(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_mam, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC MAM",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Model Ann",delta^{18}, "O (\u2030)")))
-points(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_mam, pch=1)
-abline(0,1)
-
-plot(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_son, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC SON",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Model Ann",delta^{18}, "O (\u2030)")))
-points(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_son, pch=1)
-abline(0,1)
-
-plot(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_djf, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC DJF",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Model Ann",delta^{18}, "O (\u2030)")))
-points(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_djf, pch=1)
-abline(0,1)
-
-
-plot(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_son, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC SON",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Model Ann",delta^{18}, "O (\u2030)")))
-points(precipcomp$d18O_Model_ann ~ precipcomp$d18O_OIPC_son, pch=1)
-abline(0,1)
-
-
-### Compare measured d18O carbonate (w/ no evap) in HQ and DQ temps to OIPC d18O precip
-
-plot(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_djf, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC DJF ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure HQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_djf, pch=1)
-abline(0,1)
-legend("bottomright", title = "Alt (m)", fill=rainbow(5), legend=c("0 - 500", "500 - 1000","1000 - 1500", "1500 - 2000" , "2000 - 2500"))
-
-
-plot(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_jja, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC JJA ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure HQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_jja, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_mam, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC MAM ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure HQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_mam, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_son, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC SON ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure HQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_son, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_ann, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC Ann ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure HQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_OIPC_ann, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_Model_ann, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("Model Ann ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure HQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_hq ~ precipcomp$d18O_Model_ann, pch=1)
-abline(0,1)
-
-
-## DQ
-plot(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_djf, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC DJF ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure DQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_djf, pch=1)
-abline(0,1)
-legend("bottomright", title = "Alt (m)", fill=rainbow(5), legend=c("0 - 500", "500 - 1000","1000 - 1500", "1500 - 2000" , "2000 - 2500"))
-
-
-plot(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_jja, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC JJA ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure DQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_jja, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_mam, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC MAM ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure DQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_mam, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_son, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC SON ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure DQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_son, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_ann, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("OIPC Ann ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure DQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_OIPC_ann, pch=1)
-abline(0,1)
-
-plot(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_Model_ann, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("Model Ann ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure DQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_dq ~ precipcomp$d18O_Model_ann, pch=1)
-abline(0,1)
-
-## HQ Vs DQ dO_P
-plot(precipcomp$dO_P_carb_dq ~ precipcomp$dO_P_carb_hq, pch=16, col=pal[c], xlim=c(-20,0), ylim=c(-20,0),
-     xlab=expression(paste("Measure HQ ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Measure DQ ",delta^{18}, "O (\u2030)")))
-points(precipcomp$dO_P_carb_dq ~ precipcomp$dO_P_carb_hq, pch=1)
-abline(0,1)
-legend("bottomright", title = "Alt (m)", fill=rainbow(5), legend=c("0 - 500", "500 - 1000","1000 - 1500", "1500 - 2000" , "2000 - 2500"))
-
-
-dev.off()
-## Estimate oxygen isotopes of precip from d18O carbonate and hq and dq temperatures
-
-for (i in 1:nrow(precipcomp)){
+for(i in 1:nrow(precipcomp)){
   
-A_O <- 2.71828 ^ ((2.78e6 / (precipcomp[i,"mat.wc.y"] + precipcomp[i, "hqt.offset.y"] + 273.15) ^ 2 - 2.89) / 1000)
-R_O <- (precipcomp[i, "d18O.measured"] / 1000 + 1) * 0.002067181
-R_O_P <-R_O / A_O 
-precipcomp[i, "dO_P_carb_hq"] <-  (R_O_P / 0.0020052 - 1) * 1000
-
-A_O <- 2.71828 ^ ((2.78e6 / (precipcomp[i, "mat.wc.y"] + precipcomp[i, "dqt.offset.y"] + 273.15) ^ 2 - 2.89) / 1000)
-R_O <- (precipcomp[i, "d18O.measured"] / 1000 + 1) * 0.002067181
-R_O_P <- R_O / A_O 
-precipcomp[i, "dO_P_carb_dq"] <-  (R_O_P / 0.0020052 - 1) * 1000
-
+  precipcomp[i,"d18O_hq_model"] <- -13.7 + 0.55 * (precipcomp[i,"hqt.offset"] + precipcomp[i,"mat.wc"])
+  precipcomp[i,"d18O_dq_model"] <- -13.7 + 0.55 * (precipcomp[i,"dqt.offset"] + precipcomp[i,"mat.wc"])
+  
+  precipcomp[i,"d18O_hq_OIPC"] <- ifelse(precipcomp[i, "Lat"] > 0, precipcomp[i,"d18O_OIPC_jja"], precipcomp[i,"d18O_OIPC_djf"])
+  precipcomp[i,"d18O_dq_OIPC"] <- ifelse(precipcomp[i,"DQ"] == "djf", precipcomp[i,"d18O_OIPC_djf"], 
+                                         ifelse(precipcomp[i,"DQ"] == "son", precipcomp[i, "d18O_OIPC_son"],
+                                                ifelse(precipcomp[i,"DQ"] == "mam", precipcomp[i, "d18O_OIPC_mam"], precipcomp[i, "d18O_OIPC_jja"])))
 }
+
+plot(precipcomp$d18O_hq_model ~ precipcomp$d18O_hq_OIPC, pch=16, col=pal[c], xlim=c(-30,5), ylim=c(-30,5),
+     xlab=expression(paste("HQ OIPC",delta^{18}, "O (\u2030)")),
+     ylab=expression(paste("HQ Model",delta^{18}, "O (\u2030)")))
+points(precipcomp$d18O_hq_model ~ precipcomp$d18O_hq_OIPC, pch=1)
+abline(0,1)
+legend("bottomright", title = "MAP (mm)", fill=rainbow(5), legend=c("0 - 147", "147 - 294","294 - 441", "441 - 588" , "588 - 737"))
+
+plot(precipcomp$d18O_dq_model ~ precipcomp$d18O_dq_OIPC, pch=16, col=pal[c], xlim=c(-30,5), ylim=c(-30,5),
+     xlab=expression(paste("DQ OIPC",delta^{18}, "O (\u2030)")),
+     ylab=expression(paste("DQ Model",delta^{18}, "O (\u2030)")))
+points(precipcomp$d18O_dq_model ~ precipcomp$d18O_dq_OIPC, pch=1)
+abline(0,1)
+legend("bottomright", title = "MAP (mm)", fill=rainbow(5), legend=c("0 - 147", "147 - 294","294 - 441", "441 - 588" , "588 - 737"))
 
 ### This part runs only sites w/ clumpted data
 data.clump = data.comp[!is.na(data.comp$D47.measured),]
