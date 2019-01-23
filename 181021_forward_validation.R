@@ -4,20 +4,28 @@ setwd("~/GitHub/soilCCModern")
 
 #Prepare gridded climate data
 library(raster)
-
+library(rgdal)
 #read in worldclim 2.5min mean temperature grids, downloaded 9-18-18
-setwd("C:/Users/gjbowen/Dropbox/Archived/ArcGIS/worldclim/")
+setwd("C:/Users/femal/Dropbox/worldclim/")
 files = list.files(pattern="wc2.0_2.5m_tavg*")
 mtemp = stack(files)
 mat = mean(mtemp)
 writeRaster(mat, "wc2.0_2.5m_tavg_ma.tif")
 plot(mat)
 
+mat = list.files(pattern="wc2.0_2.5m_tavg_ma.tif")
+mat = stack(mat)
+
 #now make quarterly seasonal averages
 qtemp = stack(mean(subset(mtemp, c(12,1,2))), 
               mean(subset(mtemp, 3:5)), 
               mean(subset(mtemp, 6:8)), 
               mean(subset(mtemp, 9:11)))
+
+qtemp_djf = stack(mean(subset(mtemp, c(12,1,2))))
+qtemp_mam = stack(mean(subset(mtemp, c(3:5))))
+qtemp_jja = stack(mean(subset(mtemp, c(6:8))))
+qtemp_son = stack(mean(subset(mtemp, c(9:11))))
 
 #find the hottest quarter
 hotq = which.max(qtemp)
@@ -37,7 +45,7 @@ qprec = stack(sum(subset(mprec, c(12,1,2))),
               sum(subset(mprec, 9:11)))
 
 #find the driest quarter
-dryq = which.min(qprec)
+dryq = subset(qprec, min(layer))
 plot(dryq)
 
 #now pull hot quarter temps into a single raster
@@ -45,6 +53,10 @@ hqt = max(qtemp)
 plot(hqt)
 
 #this is what that would look like as tseas
+djf.offset = qtemp_djf - mat
+mam.offset = qtemp_mam - mat
+jja.offset = qtemp_jja - mat
+son.offset = qtemp_son - mat
 hqt.offset = hqt - mat
 plot(hqt.offset)
 
@@ -77,6 +89,11 @@ plot(dqp)
 dqp.frac = dqp/map
 plot(dqp.frac)
 
+
+### To remove raster objects once done with them (they are large and will slow down other processes)
+rm(list=ls()[grep("qtemp",ls())])
+rm(list=ls()[grep("offset",ls())])
+
 #####That's all the grid processing - next bit needs only be run once after data are updated
 
 #read in the compiled data
@@ -84,6 +101,7 @@ setwd("C:/Users/gjbowen/Dropbox/HypoMirror/soilCCModern/")
 library(xlsx)
 
 #extract relevant values at sites
+precipcomp <- read.csv("valsites_sel_d18O_P.csv")
 rawsites = read.xlsx("modern_comparison.xlsx", sheetIndex = 3)
 sites = read.xlsx("modern_comparison_raw.xlsx", sheetIndex = 1)
 coords = matrix(c(sites$Lon, sites$Lat), nrow(sites), 2)
@@ -105,6 +123,28 @@ sites$hqt.offset = extract(hqt.offset, coords)
 sites$hqp.frac = extract(hqp.frac, coords)
 sites$dqt.offset = extract(dqt.offset, coords)
 sites$dqp.frac = extract(dqp.frac, coords)
+sites$djf.offset = extract(djf.offset, coords)
+sites$mam.offset = extract(mam.offset, coords)
+sites$jja.offset = extract(jja.offset, coords)
+sites$son.offset = extract(son.offset, coords)
+
+
+### Record which quarter is dry quarter. Change southern hemisphere sites to jja = summer, ect... 
+
+for (i in  1:nrow(sites)){
+sites$DQ =  ifelse(almost.equal(sites$djf.offset, sites$dqt.offset, 1e-5), "djf", 
+                   ifelse(almost.equal(sites$mam.offset, sites$dqt.offset, 1e-5), "mam",
+                          ifelse(almost.equal(sites$son.offset, sites$dqt.offset, 1e-5), "son", "jja")))
+  
+
+}
+
+for (i in 1:nrow(precipcomp)){
+precipcomp[i,"d18O_OIPC_mam"] <- mean(c(precipcomp[i,"d18O_OIPC_mar"],precipcomp[i,"d18O_OIPC_apr"],precipcomp[i,"d18O_OIPC_may"]))
+precipcomp[i,"d18O_OIPC_jja"] <- mean(c(precipcomp[i,"d18O_OIPC_jun"],precipcomp[i,"d18O_OIPC_jul"],precipcomp[i,"d18O_OIPC_aug"]))
+precipcomp[i,"d18O_OIPC_son"] <- mean(c(precipcomp[i,"d18O_OIPC_sep"],precipcomp[i,"d18O_OIPC_oct"],precipcomp[i,"d18O_OIPC_nov"]))
+precipcomp[i,"d18O_OIPC_djf"] <- mean(c(precipcomp[i,"d18O_OIPC_dec"],precipcomp[i,"d18O_OIPC_jan"],precipcomp[i,"d18O_OIPC_feb"]))
+}
 
 write.csv(sites, "valsites_sel.csv")
 
@@ -126,6 +166,33 @@ data = read.xlsx("modern_comparison.xlsx", sheetIndex = 3)
 data.aves = aggregate.data.frame(data, list(data$Site), mean, simplify = TRUE)
 data.aves$Site = NULL
 data.comp = merge.data.frame(sites, data.aves, by.x = "Site", by.y = "Group.1")
+
+## Compare dO_P from OIPC and model
+
+for(i in 1:nrow(precipcomp)){
+  
+  precipcomp[i,"d18O_hq_model"] <- -13.7 + 0.55 * (precipcomp[i,"hqt.offset"] + precipcomp[i,"mat.wc"])
+  precipcomp[i,"d18O_dq_model"] <- -13.7 + 0.55 * (precipcomp[i,"dqt.offset"] + precipcomp[i,"mat.wc"])
+  
+  precipcomp[i,"d18O_hq_OIPC"] <- ifelse(precipcomp[i, "Lat"] > 0, precipcomp[i,"d18O_OIPC_jja"], precipcomp[i,"d18O_OIPC_djf"])
+  precipcomp[i,"d18O_dq_OIPC"] <- ifelse(precipcomp[i,"DQ"] == "djf", precipcomp[i,"d18O_OIPC_djf"], 
+                                         ifelse(precipcomp[i,"DQ"] == "son", precipcomp[i, "d18O_OIPC_son"],
+                                                ifelse(precipcomp[i,"DQ"] == "mam", precipcomp[i, "d18O_OIPC_mam"], precipcomp[i, "d18O_OIPC_jja"])))
+}
+
+plot(precipcomp$d18O_hq_model ~ precipcomp$d18O_hq_OIPC, pch=16, col=pal[c], xlim=c(-30,5), ylim=c(-30,5),
+     xlab=expression(paste("HQ OIPC",delta^{18}, "O (\u2030)")),
+     ylab=expression(paste("HQ Model",delta^{18}, "O (\u2030)")))
+points(precipcomp$d18O_hq_model ~ precipcomp$d18O_hq_OIPC, pch=1)
+abline(0,1)
+legend("bottomright", title = "MAP (mm)", fill=rainbow(5), legend=c("0 - 147", "147 - 294","294 - 441", "441 - 588" , "588 - 737"))
+
+plot(precipcomp$d18O_dq_model ~ precipcomp$d18O_dq_OIPC, pch=16, col=pal[c], xlim=c(-30,5), ylim=c(-30,5),
+     xlab=expression(paste("DQ OIPC",delta^{18}, "O (\u2030)")),
+     ylab=expression(paste("DQ Model",delta^{18}, "O (\u2030)")))
+points(precipcomp$d18O_dq_model ~ precipcomp$d18O_dq_OIPC, pch=1)
+abline(0,1)
+legend("bottomright", title = "MAP (mm)", fill=rainbow(5), legend=c("0 - 147", "147 - 294","294 - 441", "441 - 588" , "588 - 737"))
 
 ### This part runs only sites w/ clumpted data
 data.clump = data.comp[!is.na(data.comp$D47.measured),]
@@ -510,7 +577,7 @@ sm_forward = function(MAP, MAT, P_seas, T_seas, pCO2){
     A_O <- 2.71828 ^ ((2.78e6 / CQT_K ^ 2 - 2.89) / 1000)
     R_O_Carb <- R_O_P * A_O
     
-    dC_Carb <- (R_Carb / RC.vpdb - 1) * 1000
+    dC_Carb <- (R_Carb / RC.vpdb - 1) * 1000 
     dO_Carb <- (R_O_Carb / RO.vpdb - 1) * 1000
   
     dat = c(median(dC_Carb), median(dO_Carb))
