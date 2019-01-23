@@ -1,1 +1,3 @@
-.RData
+.RData*
+.Rhistory
+*.tmp
