@@ -351,7 +351,7 @@ sites.depth <- merge.data.frame(depth.aves, sites, by.x = "Group.1", by.y = "Sit
 ## Run fw model for only depth sites - hq and dq w. evap
 
 ## w/ evap
-hq_pred.depth = data.frame(depth=numeric(0), soil18O=numeric(0), d13C=numeric(0), d18O=numeric(0))
+hq_pred.depth = data.frame(d18O=numeric(0), R_O_P=numeric(0), R_O_soil=numeric(0))
 for(i in 1: nrow(sites.depth)){
   hq_pred.depth[i,] = sm_forward_evap(sites.depth$map.wc[i], sites.depth$mat.wc[i], sites.depth$hqp.frac[i], sites.depth$hqt.offset[i], 280)
   
@@ -399,7 +399,7 @@ View(hq_pred_opt)
 
 dq_pred_opt = data.frame(d13C=numeric(0), d18O=numeric(0), d13C_sd=numeric(0), d18O_sd=numeric(0))
 for(i in 1: nrow(sites)){
-  dq_pred_opt[i,] = sm_forward_opt_dry(sites$map.wc[i], sites$mat.wc[i], sites$dqp.frac[i], sites$dqt.offset[i], sites$Ra[i], 280)
+  dq_pred_opt[i,] = sm_forward_opt_dry(sites$map.wc[i], sites$mat.wc[i], sites$dqp.frac[i], sites$dqt.offset[i], sites$hqt.offset[i], sites$Ra[i], 280)
   
 }
 dq_pred_opt$Site = sites$Site
@@ -419,6 +419,86 @@ for(i in 1: nrow(sites)){
   
 }
 dq_pred$Site = sites$Site
+
+## Try idea: Low MAP is dry quarter, high MAP is hot quarter. 
+cut = seq(110, 700, 1)
+cutoff = data.frame(cut, rmse_c = numeric(591), rmse_o = numeric(591))
+
+for(j in 1:nrow(cutoff)){
+sites_dry <- subset.data.frame(sites, map.wc <= cutoff$cut[j])
+sites_wet <- subset.data.frame(sites, map.wc > cutoff$cut[j])
+
+hq_pred_wet = data.frame(d13C=numeric(0), d18O=numeric(0), d13C_sd=numeric(0), d18O_sd=numeric(0))
+for(i in 1: nrow(sites_wet)){
+  hq_pred_wet[i,] = sm_forward_evap(sites_wet$map.wc[i], sites_wet$mat.wc[i], sites_wet$hqp.frac[i], sites_wet$hqt.offset[i], sites_wet$Ra[i], 280)
+  
+}
+hq_pred_wet$Site = sites_wet$Site
+
+opt_c_wet = data.frame(Site = sites_wet$Site, d13C = hq_pred_wet$d13C)
+opt_o_wet = data.frame(Site = sites_wet$Site, d18O = hq_pred_wet$d18O)
+opt_c_wet = merge.data.frame(opt_c_wet, data.comp, by.x = "Site", by.y = "Site", all.x=TRUE)
+opt_o_wet = merge.data.frame(opt_o_wet, data.comp, by.x = "Site", by.y = "Site", all.x=TRUE)
+
+dq_pred_dry = data.frame(d13C=numeric(0), d18O=numeric(0), d13C_sd=numeric(0), d18O_sd=numeric(0))
+for(i in 1: nrow(sites_dry)){
+  dq_pred_dry[i,] = sm_forward_evap(sites_dry$map.wc[i], sites_dry$mat.wc[i], sites_dry$dqp.frac[i], sites_dry$dqt.offset[i], sites_dry$Ra[i], 280)
+  
+}
+
+dq_pred_dry$Site = sites_dry$Site
+
+opt_c_dry = data.frame(Site = sites_dry$Site, d13C = dq_pred_dry$d13C)
+opt_o_dry = data.frame(Site = sites_dry$Site, d18O = dq_pred_dry$d18O)
+opt_c_dry = merge.data.frame(opt_c_dry, data.comp, by.x = "Site", by.y = "Site", all.x=TRUE)
+opt_o_dry = merge.data.frame(opt_o_dry, data.comp, by.x = "Site", by.y = "Site", all.x=TRUE)
+
+opt_c <- rbind(opt_c_wet, opt_c_dry)
+opt_o <- rbind(opt_o_wet, opt_o_dry)
+
+mse_c = (opt_c$d13C - opt_c$d13C.measured)^2
+mse_o = (opt_o$d18O - opt_o$d18O.measured)^2
+mse_c = mean(mse_c)
+mse_o = mean(mse_o)
+
+cutoff$rmse_c[j] <- sqrt(mse_c)
+cutoff$rmse_o[j] <- sqrt(mse_o)
+
+}
+
+cutoff$rmse <- (cutoff$rmse_c + cutoff$rmse_o) / 2
+
+plot(cutoff$rmse, cutoff$cut, type = "l", xlab = "Mean RMSE", ylab = "Cutoff MAP (mm)", cex.lab = 1.25, cex.axis= 1.25)
+plot(cutoff$rmse_c, cutoff$cut)
+plot(cutoff$rmse_o, cutoff$cut)
+
+## Minimum RMSE (combined) has a 280 mm cutoff
+
+
+
+
+## Wet/Dry Opt
+sites_dry <- subset.data.frame(sites, map.wc <= 280)
+sites_wet <- subset.data.frame(sites, map.wc > 280)
+
+hq_pred = data.frame(d18O=numeric(0), R_O_P=numeric(0), R_O_soil=numeric(0), R_O_surface=numeric(0))
+for(i in 1: nrow(sites)){
+  hq_pred[i,] = sm_optimizer_evap(sites$map.wc[i], sites$mat.wc[i], sites$hqp.frac[i], sites$hqt.offset[i], sites$Ra[i], 280, 0.5, 0)
+  
+}
+hq_pred$Site = sites$Site
+
+dq_pred_dry = data.frame(d13C=numeric(0), d18O=numeric(0), d13C_sd=numeric(0), d18O_sd=numeric(0))
+for(i in 1: nrow(sites_dry)){
+  dq_pred_dry[i,] = sm_forward_evap(sites_dry$map.wc[i], sites_dry$mat.wc[i], sites_dry$dqp.frac[i], sites_dry$dqt.offset[i], sites_dry$Ra[i], 280)
+  
+}
+dq_pred_dry$Site = sites_dry$Site
+
+pred <- rbind(dq_pred_dry, hq_pred_wet)
+pred <- merge.data.frame(pred, sites, by.x = "Site")
+pred <- merge.data.frame(pred, data.aves, by.x = "Site", by.y = "Group.1", all.x=TRUE)
+
 
 #add it to the predictions and plot
 layout(matrix(c(1,2,3,4), 2, 2, byrow=T))
@@ -447,37 +527,71 @@ dq.comp = merge.data.frame(dq.comp, sites, by.x = "Site", by.y = "Site", all.x=T
 
 View(hq.comp)
 
-c = abs(ceiling((hq.comp$mat.wc / max(hq.comp$mat.wc)) * 6))
+c = ceiling(((hq.comp$map.wc - 100) / 700) * 7)
 
-pal = rainbow(6)
+pal_map = brewer.pal(7, "Blues")
+display.brewer.all()
+c_mat = ceiling(((hq.comp$mat.wc + 5) / 20 * 5))
+c_mat
+pal_mat = brewer.pal(6, "YlOrRd")
 
 layout(matrix(c(1,2,3,4), 2, 2, byrow=T))
 
-plot(hq.comp$d13C, hq.comp$d13C.measured, pch=16, col=pal[c], xlim=c(-12,1.5), ylim=c(-12,1.5), main="a", cex = 1.25,
+plot(hq.comp$d13C.measured, hq.comp$d13C, pch=16, col=pal_map[c], xlim=c(-12,1.5), ylim=c(-12,1.5), main="Hot Quarter Carbon", cex = 1.25,
+     xlab="",
+     ylab=expression(paste("Predicted ",delta^{13}, "C (\u2030)")),
+     xaxt='n')
+abline(0,1)
+points(hq.comp$d13C.measured, hq.comp$d13C, pch=1)
+
+plot(hq.comp$d18O.measured, hq.comp$d18O, pch=16, col=pal_mat[c_mat], xlim=c(-17,4), ylim=c(-17,4),main="Hot Quarter Oxygen",cex = 1.25,
+     xlab="",
+     ylab=expression(paste("Predicted ",delta^{18}, "O (\u2030)")),
+     xaxt='n')
+abline(0,1)
+points(hq.comp$d18O.measured, hq.comp$d18O, pch=1)
+
+plot(dq.comp$d13C.measured, dq.comp$d13C, pch=16, col=pal_map[c], xlim=c(-12,1.5), ylim=c(-12,1.5), main="Dry Quarter Carbon",cex = 1.25,
+     xlab=expression(paste("Observed ",delta^{13}, "C (\u2030)")),
+     ylab=expression(paste("Predicted ",delta^{13}, "C (\u2030)")))
+abline(0,1)
+points(dq.comp$d13C.measured, dq.comp$d13C, pch=1)
+legend("bottomright", title = "MAP (mm)", cex=0.8, fill=pal_map, legend=c("100 - 200", "200 - 300", "300 - 400", "400 - 500", "500 - 600", "600 - 700", "700 - 800"))
+
+plot(dq.comp$d18O.measured, dq.comp$d18O, pch=16, col=pal_mat[c_mat], xlim=c(-17,4), ylim=c(-17,4), main="Dry Quarter Oxygen",cex = 1.25,
+     xlab=expression(paste("Observed ",delta^{18}, "O (\u2030)")),
+     ylab=expression(paste("Predicted ",delta^{18}, "O (\u2030)")))
+abline(0,1)
+points(dq.comp$d18O.measured, dq.comp$d18O, pch=1)
+legend("bottomright", title = expression(paste("MAT (",degree,"C)")), fill=brewer.pal(6, "YlOrRd"), legend=c("-5 - 0", "0 - 5", "5 - 10", "10 - 15", "15 - 20"))
+
+layout(matrix(c(1,2), 1, 2, byrow=T))
+
+plot(pred$d13C.measured, pred$d13C,  pch=16, col=pal_map[c], xlim=c(-12,1.5), ylim=c(-12,1.5), main="", cex = 1.25,
+     xlab=expression(paste("Observed ",delta^{13}, "C (\u2030)")),
+     ylab=expression(paste("Predicted ",delta^{13}, "C (\u2030)")))
+abline(0,1)
+points(pred$d13C.measured, pred$d13C, pch=1)
+
+plot(pred$d18O.measured, pred$d18O, pch=16, col=pal_map[c], xlim=c(-17,4), ylim=c(-17,4), main="",cex = 1.25,
+     xlab=expression(paste("Observed ",delta^{18}, "O (\u2030)")),
+     ylab=expression(paste("Predicted ",delta^{18}, "O (\u2030)")))
+abline(0,1)
+points(pred$d18O.measured, pred$d18O, pch=1)
+
+plot(dq.comp$d13C.measured, dq.comp$d13C, pch=16, col=pal_map[c], xlim=c(-12,1.5), ylim=c(-12,1.5), main="Dry Quarter Carbon",cex = 1.25,
      xlab=expression(paste("Predicted ",delta^{13}, "C (\u2030)")),
      ylab=expression(paste("Observed ",delta^{13}, "C (\u2030)")))
-points(hq.comp$d13C, hq.comp$d13C.measured, pch=1)
 abline(0,1)
-legend("bottomright", title = "MAP (mm)", fill=rainbow(6), legend=c("0-122", "122-244", "244-366", "366-488", "488-600", "600+"))
+points(dq.comp$d13C.measured, dq.comp$d13C, pch=1)
+legend("bottomright", title = "MAP (mm)", cex=0.8, fill=pal_map, legend=c("100 - 200", "200 - 300", "300 - 400", "400 - 500", "500 - 600", "600 - 700", "700 - 800"))
 
-
-plot(hq.comp$d18O, hq.comp$d18O.measured, pch=16, col=pal[c], xlim=c(-17,10), ylim=c(-17,10),main="b",cex = 1.25,
+plot(dq.comp$d18O.measured, dq.comp$d18O, pch=16, col=pal_mat[c_mat], xlim=c(-17,4), ylim=c(-17,4), main="Dry Quarter Oxygen",cex = 1.25,
      xlab=expression(paste("Predicted ",delta^{18}, "O (\u2030)")),
      ylab=expression(paste("Observed ",delta^{18}, "O (\u2030)")))
-points(hq.comp$d18O, hq.comp$d18O.measured, pch=1)
 abline(0,1)
-
-plot(dq.comp$d13C, dq.comp$d13C.measured, pch=16, col=pal[c], xlim=c(-12,1.5), ylim=c(-12,1.5), main="c",cex = 1.25,
-     xlab=expression(paste("Predicted ",delta^{13}, "C (\u2030)")),
-     ylab=expression(paste("Observed ",delta^{13}, "C (\u2030)")))
-points(dq.comp$d13C, dq.comp$d13C.measured, pch=1)
-abline(0,1)
-
-plot(dq.comp$d18O, dq.comp$d18O.measured, pch=16, col=pal[c], xlim=c(-17,10), ylim=c(-17,10), main="d",cex = 1.25,
-     xlab=expression(paste("Predicted ",delta^{18}, "O (\u2030)")),
-     ylab=expression(paste("Observed ",delta^{18}, "O (\u2030)")))
-points(dq.comp$d18O, dq.comp$d18O.measured, pch=1)
-abline(0,1)
+points(dq.comp$d18O.measured, dq.comp$d18O, pch=1)
+legend("bottomright", title = expression(paste("MAT (",degree,"C)")), fill=brewer.pal(6, "YlOrRd"), legend=c("-5 - 0", "0 - 5", "5 - 10", "10 - 15", "15 - 20"))
 
 ## Calculate RMSE
 
@@ -594,12 +708,15 @@ sm_forward_opt_hot = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   dC_Soil = (dC_Soil.num / (dC_Soil.denom * RC.vpdb) - 1) * 1000
   
   #Soil carbonate C isotopes
-  A_CO2_Carb <- 2.71828 ^ (-2.988e3 / CQT_K ^ 2 + 7.6663 / CQT_K - 0.0024612)
+  t <- ifelse(CQT > MAT + 3, 1, ifelse(CQT < MAT - 3, 3, 4))
+  T_soil <- MAT + (T_seas * sin((2*3.1415/4) * t - z/200) / exp(z/200)) 
+  T_soil_K <- T_soil + 273.15
+  A_CO2_Carb <- 2.71828 ^ (-2.988e3 / T_soil_K ^ 2 + 7.6663 / T_soil_K - 0.0024612)
   R_Soil <- (dC_Soil / 1000 + 1) * RC.vpdb
   R_Carb <- R_Soil / A_CO2_Carb
   
   #Soil carbonate O isotopes
-  A_O <- 2.71828 ^ ((2.78e6 / CQT_K ^ 2 - 2.89) / 1000)
+  A_O <- 2.71828 ^ ((2.78e6 / T_soil_K ^ 2 - 2.89) / 1000)
   R_O_Carb <- R_O_P * A_O
   
   dC_Carb <- (R_Carb / RC.vpdb - 1) * 1000 
@@ -610,7 +727,7 @@ sm_forward_opt_hot = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   return(dat)
 }
 
-sm_forward_opt_dry = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
+sm_forward_opt_dry = function(MAP, MAT, P_seas, T_seas, hqt.offset, Ra, pCO2){
   
   deltaA = rnorm(nsynth, -6.5, 0.3)
   pores = rnorm(nsynth, 0.46, 0.1)
@@ -675,7 +792,7 @@ sm_forward_opt_dry = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   #
   
   #Potential ET
-  ETP_D_m <- ifelse (RH < 50, 0.013 * (CQT / (CQT + 15)) * (23.8856 * Rs + 50)/(2.501 - 2.3664e-3 * CQT)* (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50)/(2.501 - 2.3664e-3 * CQT))  ETP_D = rnorm(nsynth, ETP_D_m, 0.2)  #PET in mm/day, Turc 1961
+  ETP_D_m <- ifelse (RH < 50, 0.013 * (CQT / (CQT + 15)) * (23.8856 * Rs + 50) * (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50))
   ETP_M <- ETP_D * 30  #mm/month
   
   #Actual ET
@@ -685,7 +802,7 @@ sm_forward_opt_dry = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   
   #Free air porosity
   #Have updated, now scales volumetrically w/ excess precipitation relative to pore space
-  FAP <- pmin((pores - (CMP_mm - ETA)/(L*10*pores)), pores)
+  FAP <- pmin((pores - (CMP_mm - ETA)/(L*10*pores)), pores-0.05)
   FAP = pmax(FAP,0.01) #dimensionless
   
   #CO2 Diffusion coefficients
@@ -711,12 +828,15 @@ sm_forward_opt_dry = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   dC_Soil = (dC_Soil.num / (dC_Soil.denom * RC.vpdb) - 1) * 1000
   
   #Soil carbonate C isotopes
-  A_CO2_Carb <- 2.71828 ^ (-2.988e3 / CQT_K ^ 2 + 7.6663 / CQT_K - 0.0024612)
+  t <- ifelse(CQT > MAT + 3, 1, ifelse(CQT < MAT - 3, 3, 4))
+  T_soil <- MAT + (hqt.offset * sin((2*3.1415/4) * t - z/200) / exp(z/200)) 
+  T_soil_K <- T_soil + 273.15
+  A_CO2_Carb <- 2.71828 ^ (-2.988e3 / T_soil_K ^ 2 + 7.6663 / T_soil_K - 0.0024612)
   R_Soil <- (dC_Soil / 1000 + 1) * RC.vpdb
   R_Carb <- R_Soil / A_CO2_Carb
   
   #Soil carbonate O isotopes
-  A_O <- 2.71828 ^ ((2.78e6 / CQT_K ^ 2 - 2.89) / 1000)
+  A_O <- 2.71828 ^ ((2.78e6 / T_soil_K ^ 2 - 2.89) / 1000)
   R_O_Carb <- R_O_P * A_O
   
   dC_Carb <- (R_Carb / RC.vpdb - 1) * 1000 
@@ -791,7 +911,7 @@ sm_forward_evap = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   R_sec = R_sec / L / pores #molC/cm3s
   
   #Potential ET
-  ETP_D_m <- ifelse (RH < 50, 0.013 * (CQT / (CQT + 15)) * (23.8856 * Rs + 50)/(2.501 - 2.3664e-3 * CQT)* (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50)/(2.501 - 2.3664e-3 * CQT))  ETP_D = rnorm(nsynth, ETP_D_m, 0.2)  #PET in mm/day, Turc 1961
+  ETP_D_m <- ifelse (RH < 50, 0.013 * (CQT / (CQT + 15)) * (23.8856 * Rs + 50) * (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50))
   ETP_M <- ETP_D * 30  #mm/month
   
   #Actual ET
@@ -801,7 +921,7 @@ sm_forward_evap = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   
   #Free air porosity
   #Have updated, now scales volumetrically w/ excess precipitation relative to pore space
-  FAP <- pmin((pores - (CMP_mm - ETA)/(L*10*pores)), pores)
+  FAP <- pmin((pores - (CMP_mm - ETA)/(L*10*pores)), pores-0.05)
   FAP = pmax(FAP,0.01) #dimensionless
   
   #CO2 Diffusion coefficients
@@ -827,7 +947,10 @@ sm_forward_evap = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   dC_Soil = (dC_Soil.num / (dC_Soil.denom * RC.vpdb) - 1) * 1000
   
   #Soil carbonate C isotopes
-  A_CO2_Carb <- 2.71828 ^ (-2.988e3 / CQT_K ^ 2 + 7.6663 / CQT_K - 0.0024612)
+  t <- ifelse(CQT > MAT + 3, 1, ifelse(CQT < MAT - 3, 3, 4))
+  T_soil <- MAT + (hqt.offset * sin((2*3.1415/4) * t - z/200) / exp(z/200)) 
+  T_soil_K <- T_soil + 273.15
+  A_CO2_Carb <- 2.71828 ^ (-2.988e3 / T_soil_K ^ 2 + 7.6663 / T_soil_K - 0.0024612)
   R_Soil <- (dC_Soil / 1000 + 1) * RC.vpdb
   R_Carb <- R_Soil / A_CO2_Carb
   
@@ -854,7 +977,7 @@ sm_forward_evap = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   dO_soil <- (R_O_soil/RO.vsmow - 1) * 1000
   
   #Soil carbonate O isotopes
-  A_O <- 2.71828 ^ ((2.78e6 / CQT_K ^ 2 - 2.89) / 1000)
+  A_O <- 2.71828 ^ ((2.78e6 / T_soil_K ^ 2 - 2.89) / 1000)
   R_O_Carb <- R_O_soil * A_O
   
   dC_Carb <- (R_Carb / RC.vpdb - 1) * 1000
@@ -945,6 +1068,7 @@ sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, Ra, spre, esw){
   CMP_cm <- CQP / 30
   CQT <- MAT + T_seas
   CQT_K <- CQT + 273
+  T_OOS <- (MAT * 4 -  CQT) / 3
   
   #Convert pCO2 to units mol/cm^3
   pCO2_mcc = pCO2 / (0.08206 * CQT_K * 10^9)  #mol/cm^3
@@ -960,7 +1084,9 @@ sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, Ra, spre, esw){
   RH <- h * 100
   
   #Precipitation O isotope ratios 
-  dO_P_m <- -14.76 + 0.56 * (MAT + T_seas * spre)  #Relevant precip is spre % from CQ
+  dO_P_OOS <- -14.76 + 0.56 * T_OOS  #Relevant precip is spre % from CQ
+  dO_P_PCQ <- -14.76 + 0.56 * CQT
+  dO_P_m <- (dO_P_PCQ * P_seas + dO_P_OOS * (1 - spre) * (1 - P_seas)) / (P_seas + (1 - spre) * (1 - P_seas))
   dO_P = rnorm(nsynth, dO_P_m, 1.46)
   R_O_P = (dO_P / 1000 + 1) * RO.vsmow
   
@@ -990,7 +1116,7 @@ sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, Ra, spre, esw){
   R_sec = R_sec / L / pores #molC/cm3s
   
   #Potential ET
-  ETP_D_m <- ifelse (RH < 50, 0.013 * (CQT / (CQT + 15)) * (23.8856 * Rs + 50)/(2.501 - 2.3664e-3 * CQT)* (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50)/(2.501 - 2.3664e-3 * CQT))  ETP_D = rnorm(nsynth, ETP_D_m, 0.2)  #PET in mm/day, Turc 1961
+  ETP_D_m <- ifelse (RH < 50, 0.013 * (CQT / (CQT + 15)) * (23.8856 * Rs + 50) * (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50))
   ETP_M <- ETP_D * 30  #mm/month
   
   #Actual ET
@@ -1000,7 +1126,8 @@ sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, Ra, spre, esw){
   
   #Free air porosity
   #Have updated, now scales volumetrically w/ excess precipitation relative to pore space
-  FAP <- pmin((pores - (CMP_mm - ETA)/(L*10*pores)), pores)
+  CQP_soil <- (MAP * (P_seas + (1 - spre) * (1 - P_seas))) / 3
+  FAP <- pmin((pores - (CQP_soil - ETA)/(L * 10 * pores)), pores-0.05)
   FAP = pmax(FAP,0.01) #dimensionless
   
   #CO2 Diffusion coefficient
@@ -1026,7 +1153,10 @@ sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, Ra, spre, esw){
   dC_Soil = (dC_Soil.num / (dC_Soil.denom * RC.vpdb) - 1) * 1000
   
   #Soil carbonate C isotopes
-  A_CO2_Carb <- 2.71828 ^ (-2.988e3 / CQT_K ^ 2 + 7.6663 / CQT_K - 0.0024612)
+  t <- ifelse(CQT > MAT + 3, 1, ifelse(CQT < MAT - 3, 3, 4))
+  T_soil <- MAT + (hqt.offset * sin((2*3.1415/4) * t - z/200) / exp(z/200)) 
+  T_soil_K <- T_soil + 273.15
+  A_CO2_Carb <- 2.71828 ^ (-2.988e3 / T_soil_K ^ 2 + 7.6663 / T_soil_K - 0.0024612)
   R_Soil <- (dC_Soil / 1000 + 1) * RC.vpdb
   R_Carb <- R_Soil / A_CO2_Carb
   
@@ -1041,7 +1171,7 @@ sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, Ra, spre, esw){
   
   #Soil water diffusion evaporation balance
   E_s <- E / (1000 * 30 * 24 * 3600) #evaporation in m/sec
-  DIFO <- 1.637e-8 * (CQT_K / 216.25 - 1) ^ 2.074 * (pores) * tort   ## should be soil water fraction, 
+  DIFO <- 1.637e-8 * (CQT_K / 216.25 - 1) ^ 2.074 * (pores-FAP) * tort   ## should be soil water fraction, 
   ## pores - FAP. units: m2/sec. However, the the paper assumes total saturation, where FAP = 0. 
   ## pores - FAP gives no evap at low precip regimes bc DIFO is almost 0, which makes the model insensitive to ews
   z_i <- DIFO / E_s #mean penetration depth of evap, in m
@@ -1050,12 +1180,12 @@ sm_optimizer = function(MAP, MAT, P_seas, T_seas, pCO2, Ra, spre, esw){
   DRF <- 1 + 0.8 * (1 / 0.9723 - 1)
   R_O_surface <- ((1 - h) * DRF * R_O_P + h * R_O_atm) / (1 / A_atmP)
   R_O_soil <- ((R_O_surface - R_O_P) * 2.71828 ^ (-z_m / z_i)) + R_O_P
-  R_O_soil = R_O_soil * esw + R_O_P * (1 - esw)  #soil water is esw % evaporated fraction
-  dO_soil <- (R_O_soil/RO.vsmow - 1) * 1000
+  R_O_soil_EVAP <- R_O_soil * esw + R_O_P * (1 - esw)  #soil water is esw % evaporated fraction
+  dO_soil <- (R_O_soil_EVAP/RO.vsmow - 1) * 1000
   
   #Soil carbonate O isotopes
-  A_O <- 2.71828 ^ ((2.78e6 / CQT_K ^ 2 - 2.89) / 1000)
-  R_O_Carb <- R_O_soil * A_O
+  A_O <- 2.71828 ^ ((2.78e6 / T_soil_K ^ 2 - 2.89) / 1000)
+  R_O_Carb <- R_O_soil_EVAP * A_O
   
   dC_Carb <- (R_Carb / RC.vpdb - 1) * 1000
   dO_Carb <- (R_O_Carb / RO.vpdb - 1) * 1000
@@ -1088,7 +1218,7 @@ for(j in 1:nrow(parms)){
 }
 
 View(parms)
-
+min(parms$rmse)
 rmses = matrix(parms$rmse, 20, 20)
 rmses = rmses[c(20:1),]
 rmses.rast = raster(rmses, xmn=0, xmx=0.95, ymn=0, ymx=0.95)
@@ -1096,7 +1226,7 @@ rmses.rast = raster(rmses, xmn=0, xmx=0.95, ymn=0, ymx=0.95)
 layout(matrix(c(1,2), 1, 2, byrow = TRUE))
 
 par(mai=c(1, 1, 1, 1))
-plot(rmses.rast, main="Hot Quarter", xlab="% Seasonal Rainfall", ylab="% Evaporated Water", xlim=c(0,0.95), ylim=c(0,0.95))  #now need to make a nice plot...
+plot(rmses.rast, main="Hot Quarter", xlab="% Seasonal Rainfall", ylab="% Evaporated Water", xlim=c(0,0.95), ylim=c(0,0.95), zlim=c(2.4,6.5))  #now need to make a nice plot...
 mtext("RMSE, (\u2030)", 4, line=0.5)
 dev.off()
 jpeg("O_opt.jpg", res=300, units="in", width = 5.7, height = 5)
@@ -1123,15 +1253,72 @@ for(j in 1:nrow(parms_DQ)){
 
 View(parms_DQ)
 
-rmses = matrix(parms_DQ$rmse, 20, 20)
-rmses = rmses[c(20:1),]
-rmses.rast = raster(rmses, xmn=0, xmx=0.95, ymn=0, ymx=0.95)
+rmses_DQ = matrix(parms_DQ$rmse, 20, 20)
+rmses_DQ = rmses_DQ[c(20:1),]
+rmses.rast_DQ = raster(rmses_DQ, xmn=0, xmx=0.95, ymn=0, ymx=0.95)
 
 jpeg("O_opt.jpg", res=300, units="in", width = 5.7, height = 5)
 par(mai=c(1, 1, 1, 1))
-plot(rmses.rast, main="Dry Quarter", xlab="% Seasonal Rainfall", ylab="% Evaporated Water")  #now need to make a nice plot...
+plot(rmses.rast_DQ, main="Dry Quarter", xlab="% Seasonal Rainfall", ylab="% Evaporated Water", zlim=c(2.4,6.5))  #now need to make a nice plot...
 mtext("RMSE, (\u2030)", 4, line=0.5)
 dev.off()
+min(parms_DQ$rmse)
+
+parms_wet = data.frame(spres = ss, esws = rep(s, 20), rmse = numeric(400))
+
+for(j in 1:nrow(parms_wet)){
+  opt = numeric()
+  for(i in 1: nrow(sites_wet)){
+    opt[i] = sm_optimizer(sites_wet$map.wc[i], sites_wet$mat.wc[i], sites_wet$hqp.frac[i], sites_wet$hqt.offset[i], 280, sites_wet$Ra[i], parms_wet$spres[j], parms_wet$esws[j])
+  }
+  
+  opt = data.frame(Site = sites_wet$Site, d18O = opt)
+  opt = merge.data.frame(opt, data.comp, by.x = "Site", by.y = "Site", all.x=TRUE)
+  
+  mse = (opt$d18O - opt$d18O.measured)^2
+  mse = mean(mse)
+  parms_wet$rmse[j] = sqrt(mse)
+}
+
+View(parms_wet)
+min(parms_wet$rmse)
+rmses_wet = matrix(parms_wet$rmse, 20, 20)
+rmses_wet = rmses_wet[c(20:1),]
+rmses.rast_wet = raster(rmses_wet, xmn=0, xmx=0.95, ymn=0, ymx=0.95)
+
+layout(matrix(c(1,2), 1, 2, byrow = TRUE))
+
+par(mai=c(1, 1, 1, 1))
+plot(rmses.rast_wet, main="A", xlab="% Seasonal Rainfall", ylab="% Evaporated Water", xlim=c(0,0.95), ylim=c(0,0.95))  #now need to make a nice plot...
+mtext("RMSE, (\u2030)", 4, line=0.5)
+
+parms_dry = data.frame(spres = ss, esws = rep(s, 20), rmse = numeric(400))
+
+for(j in 1:nrow(parms_dry)){
+  opt = numeric()
+  for(i in 1: nrow(sites_dry)){
+    opt[i] = sm_optimizer(sites_dry$map.wc[i], sites_dry$mat.wc[i], sites_dry$hqp.frac[i], sites_dry$hqt.offset[i], 280, sites_dry$Ra[i], parms_dry$spres[j], parms_dry$esws[j])
+  }
+  
+  opt = data.frame(Site = sites_dry$Site, d18O = opt)
+  opt = merge.data.frame(opt, data.comp, by.x = "Site", by.y = "Site", all.x=TRUE)
+  
+  mse = (opt$d18O - opt$d18O.measured)^2
+  mse = mean(mse)
+  parms_dry$rmse[j] = sqrt(mse)
+}
+
+View(parms_dry)
+min(parms_dry$rmse)
+rmses_dry = matrix(parms_dry$rmse, 20, 20)
+rmses_dry = rmses_dry[c(20:1),]
+rmses.rast_dry = raster(rmses_dry, xmn=0, xmx=0.95, ymn=0, ymx=0.95)
+
+layout(matrix(c(1,2), 1, 2, byrow = TRUE))
+
+par(mai=c(1, 1, 1, 1))
+plot(rmses.rast_dry, main="A", xlab="% Seasonal Rainfall", ylab="% Evaporated Water", xlim=c(0,0.95), ylim=c(0,0.95))  #now need to make a nice plot...
+mtext("RMSE, (\u2030)", 4, line=0.5)
 
 
 ### Optimizing the model to fraction of estimated respiration rate
@@ -1206,7 +1393,7 @@ sm_optimizer_r = function(MAP, MAT, P_seas, T_seas, pCO2, Ra, rr){
   R_sec = R_sec / L / pores #molC/cm3s
   
   #Potential ET
-  ETP_D_m <- ifelse (RH < 50, 0.013 * (CQT / (CQT + 15)) * (23.8856 * Rs + 50)/(2.501 - 2.3664e-3 * CQT)* (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50)/(2.501 - 2.3664e-3 * CQT))  ETP_D = rnorm(nsynth, ETP_D_m, 0.2)  #PET in mm/day, Turc 1961
+  ETP_D_m <- ifelse (RH < 50, 0.013 * (CQT / (CQT + 15)) * (23.8856 * Rs + 50) * (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50))
   ETP_M <- ETP_D * 30  #mm/month
   
   #Actual ET
@@ -1216,7 +1403,7 @@ sm_optimizer_r = function(MAP, MAT, P_seas, T_seas, pCO2, Ra, rr){
   
   #Free air porosity
   #Have updated, now scales volumetrically w/ excess precipitation relative to pore space
-  FAP <- pmin((pores - (CMP_mm - ETA)/(L*10*pores)), pores)
+  FAP <- pmin((pores - (CMP_mm - ETA)/(L*10*pores)), pores-0.05)
   FAP = pmax(FAP,0.01) #dimensionless
   
   #CO2 Diffusion coefficient
@@ -1242,7 +1429,10 @@ sm_optimizer_r = function(MAP, MAT, P_seas, T_seas, pCO2, Ra, rr){
   dC_Soil = (dC_Soil.num / (dC_Soil.denom * RC.vpdb) - 1) * 1000
   
   #Soil carbonate C isotopes
-  A_CO2_Carb <- 2.71828 ^ (-2.988e3 / CQT_K ^ 2 + 7.6663 / CQT_K - 0.0024612)
+  t <- ifelse(CQT > MAT + 3, 1, ifelse(CQT < MAT - 3, 3, 4))
+  T_soil <- MAT + (hqt.offset * sin((2*3.1415/4) * t - z/200) / exp(z/200)) 
+  T_soil_K <- T_soil + 273.15
+  A_CO2_Carb <- 2.71828 ^ (-2.988e3 / T_soil_K ^ 2 + 7.6663 / T_soil_K - 0.0024612)
   R_Soil <- (dC_Soil / 1000 + 1) * RC.vpdb
   R_Carb <- R_Soil / A_CO2_Carb
   
@@ -1257,11 +1447,11 @@ sm_optimizer_r = function(MAP, MAT, P_seas, T_seas, pCO2, Ra, rr){
   
   #Soil water diffusion evaporation balance
   E_s <- E / (1000 * 30 * 24 * 3600) #evaporation in m/sec
-  DIFO <- 1.637e-8 * (CQT_K / 216.25 - 1) ^ 2.074 * pores * tort  ##check these, why the 2 lines?
+  DIFO <- 1.637e-8 * (CQT_K / 216.25 - 1) ^ 2.074 * (pores-FAP) * tort  ##check these, why the 2 lines?
   z_i <- DIFO / E_s #mean penitration depth of evap, in m
   
   #Soil water O isotopes
-  A_O <- 2.71828 ^ ((2.78e6 / CQT_K ^ 2 - 2.89) / 1000)
+  A_O <- 2.71828 ^ ((2.78e6 / T_soil_K ^ 2 - 2.89) / 1000)
   R_O_Carb <- R_O_P * A_O
   
   dC_Carb <- (R_Carb / RC.vpdb - 1) * 1000
@@ -1320,10 +1510,6 @@ lines(parms$rmse ~ parms$rr)
 min(parms$rmse)
 rr_opt_dry = 0.64
 
-
-
-
-(11.7 / (11.7+15)) * 0.0133 * (50 + 16/23.884) * 365
 ## Only clumped sites
 
 parms = data.frame(rr = rr, rmse = numeric(400))
