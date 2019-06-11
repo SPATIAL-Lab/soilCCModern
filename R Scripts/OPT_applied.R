@@ -24,10 +24,11 @@ sm_forward_opt_hq = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   CQT <- MAT + T_seas
   CQT_K <- CQT + 273
   
-  #Soil temps
-  t <- 1
+  #Soil temps - T is highest at t = 0.3, mean at t = 0.05, low at t = 0.8
+  
+  t <- ifelse(CQT > MAT + 3, 0.3, ifelse(CQT < MAT - 3, 0.8, 0.05))
   d <- sqrt((2*0.0007)/((2*3.1415/3.154e7)*0.3))
-  T_soil <- MAT + (T_seas * sin((2*3.1415/4) * t - z/d) / exp(z/d)) 
+  T_soil <- MAT + (hqt.offset * sin(2 * 3.1415 * t - z/d) / exp(z/d)) 
   T_soil_K <- T_soil + 273.15
   
   #Convert pCO2 to units mol/cm^3
@@ -148,8 +149,15 @@ sm_forward_opt_dq = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   CQT <- MAT + T_seas
   CQT_K <- CQT + 273
   
+  #Soil temps - T is highest at t = 0.3, mean at t = 0.05, low at t = 0.8
+  
+  t <- ifelse(CQT > MAT + 3, 0.3, ifelse(CQT < MAT - 3, 0.8, 0.05))
+  d <- sqrt((2*0.0007)/((2*3.1415/3.154e7)*0.3))
+  T_soil <- MAT + (hqt.offset * sin(2 * 3.1415 * t - z/d) / exp(z/d)) 
+  T_soil_K <- T_soil + 273.15
+  
   #Convert pCO2 to units mol/cm^3
-  pCO2_mcc = pCO2 / (0.08206 * CQT_K * 10^9)  #mol/cm^3
+  pCO2_mcc = pCO2 / (0.08206 * T_soil_K * 10^9)  #mol/cm^3
   
   #Relative humidity, now beta distribution
   h_m <- 0.25 + 0.7 * (CQP / 900)
@@ -176,7 +184,7 @@ sm_forward_opt_dq = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   
   #Respiration rate, now gamma dist
   R_day_m <- 1.25 * exp(0.0545 * CQT) * CMP_cm / (4.259 + CMP_cm)  #Raich 2002, gC/m2day
-  R_day_m <- R_day_m * rr_opt_dq # Dry site respiration rate optimization - 46% estimated
+  R_day_m <- R_day_m * rr_opt_dq # Dry quarter respiration rate optimization - % of estimated
   theta = (R_day_m*0.5)^2/R_day_m #gamma scale parameter, using mean residual of 50% based on Raich validation data 
   k = R_day_m / theta #gamma shape parameter
   R_day = rgamma(nsynth, shape = k, scale = theta) #lets use gamma for these quants bounded at zero....
@@ -188,6 +196,7 @@ sm_forward_opt_dq = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   
   #Potential ET
   ETP_D_m <- ifelse (RH < 50, 0.013 * (CQT / (CQT + 15)) * (23.8856 * Rs + 50) * (1 + ((50 - RH) / 70)), 0.0133 * (CQT / (CQT + 15)) * (23.885 * Rs + 50))
+  ETP_D = rnorm(nsynth, ETP_D_m, 0.2)  #PET in mm/day, Turc 1961
   ETP_M <- ETP_D * 30  #mm/month
   
   #Actual ET
@@ -197,11 +206,11 @@ sm_forward_opt_dq = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   
   #Free air porosity
   #Have updated, now scales volumetrically w/ excess precipitation relative to pore space
-  FAP <- pmin((pores - (CMP_mm - ETA)/(L*10*pores)), pores-0.05)
+  FAP <- pmin((pores - (CMP_mm - ETA)/(L*10*pores)), pores - 0.05)
   FAP = pmax(FAP,0.01) #dimensionless
   
   #CO2 Diffusion coefficients
-  DIFC = FAP * tort * 0.1369 * (CQT_K / 273.15) ^ 1.958
+  DIFC = FAP * tort * 0.1369 * (T_soil_K / 273.15) ^ 1.958
   
   #Water limitation of discriminaton, Diefendorf
   W_m <- 22.65 - (1.2 * (MAP + 975)) / (27.2 + 0.04 * (MAP + 975))
@@ -222,11 +231,7 @@ sm_forward_opt_dq = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   dC_Soil.denom = dC_Soil.resp * (1 - DIF.ratio * deltaP_hat) + pCO2_mcc * (1 - deltaA_hat)
   dC_Soil = (dC_Soil.num / (dC_Soil.denom * RC.vpdb) - 1) * 1000
   
-  #Soil carbonate C isotopes
-  t <- 4
-  d <- sqrt((2*0.0007)/((2*3.1415/3.154e7)*0.3))
-  T_soil <- MAT + (hqt.offset * sin((2*3.1415/4) * t - z/d) / exp(z/d)) 
-  T_soil_K <- T_soil + 273.15
+  
   A_CO2_Carb <- 2.71828 ^ (-2.988e3 / T_soil_K ^ 2 + 7.6663 / T_soil_K - 0.0024612)
   R_Soil <- (dC_Soil / 1000 + 1) * RC.vpdb
   R_Carb <- R_Soil / A_CO2_Carb
@@ -242,7 +247,6 @@ sm_forward_opt_dq = function(MAP, MAT, P_seas, T_seas, Ra, pCO2){
   
   return(dat)
 }
-
 
 
 ## Post- validation after optimization
