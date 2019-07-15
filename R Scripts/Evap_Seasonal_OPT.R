@@ -28,8 +28,8 @@ sm_optimizer_evap = function(MAP, MAT, P_seas, T_seas, pCO2, Ra, spre, esw){
   
   #Soil Temps
   d <- sqrt((2*0.0007)/((2*3.1415/3.154e7)*0.3))
-  t <- ifelse(CQT > MAT + 3, 1, ifelse(CQT < MAT - 3, 3, 4))
-  T_soil <- MAT + (hqt.offset * sin((2*3.1415/4) * t - z/d) / exp(z/d)) 
+  t <- ifelse(CQT > MAT + 3, 0.3, ifelse(CQT < MAT - 3, 0.8, 0.05))
+  T_soil <- MAT + (hqt.offset * sin((2*3.1415) * t - z/d) / exp(z/d)) 
   T_soil_K <- T_soil + 273.15
   
   #Convert pCO2 to units mol/cm^3
