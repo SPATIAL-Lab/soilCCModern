@@ -440,43 +440,14 @@ dC_Carb_map_hq <- overlay(map, mat, hqp.frac, hqt.offset, Ra, fun=raster_opt_hq_
 dO_Carb_map_dq <- overlay(map, mat, dqp.frac, dqt.offset, hqt.offset, fun=raster_opt_dq_dO)
 dC_Carb_map_dq <- overlay(map, mat, dqp.frac, dqt.offset, hqt.offset, Ra, fun=raster_opt_dq_dC)
 
-dC_Carb_map_diff <- dC_Carb_map_hq - dC_Carb_map_dq
-dO_Carb_map_diff <- dO_Carb_map_hq - dO_Carb_map_dq
+jpeg("OPT_MAPS.jpg", units="in", res=300, width=8.5, height=11)
 
-jpeg("OPT_MAPS.jpg", units="in", res=300, width=13, height=6)
-
-layout(matrix(c(1,2,3,4,5,6), 3, 2, byrow=T))
-
-par(mar=c(1,2,1,6))
-plot(dC_Carb_map_hq, zlim=c(-20, 25), xaxt='n', yaxt='n')
-mtext(expression(paste(delta^{13}, "C"[carbonate], "(\u2030)")), 4, line=1, cex=1)
-text(-170, 80, "a", cex=1.5)
-
-par(mar=c(1,2,1,6))
-plot(dO_Carb_map_hq, zlim=c(-30, 0), xaxt='n', yaxt='n')
-mtext(expression(paste(delta^{18}, "O"[carbonate], "(\u2030)")), 4, line=1, cex=1)
-text(-170, 80, "b", cex=1.5)
-
-par(mar=c(1,2,1,6))
-plot(dC_Carb_map_dq, xaxt='n', yaxt='n')
-mtext(expression(paste(delta^{13}, "C"[carbonate], "(\u2030)")), 4, line=1, cex=1)
-text(-170, 80, "c", cex=1.5)
-
-par(mar=c(1,2,1,6))
-plot(dO_Carb_map_dq, xaxt='n', yaxt='n')
-mtext(expression(paste(delta^{18}, "O"[carbonate], "(\u2030)")), 4, line=1, cex=1)
-text(-170, 80, "d", cex=1.5)
-
-par(mar=c(1,2,1,6))
-plot(dC_Carb_map_diff, xaxt='n', yaxt='n')
-mtext(expression(paste(delta^{13}, "C"[carbonate], "(\u2030)")), 4, line=1, cex=1)
-text(-170, 80, "c", cex=1.5)
-
-par(mar=c(1,2,1,6))
-plot(dO_Carb_map_diff, xaxt='n', yaxt='n')
-mtext(expression(paste(delta^{18}, "O"[carbonate], "(\u2030)")), 4, line=1, cex=1)
-text(-170, 80, "d", cex=1.5)
+plot(dO_Carb_map_hq)
+plot(dC_Carb_map_hq)
+plot(dO_Carb_map_dq)
+plot(dC_Carb_map_dq)
 
 dev.off()
 
 save.image(file=".RData")
+
