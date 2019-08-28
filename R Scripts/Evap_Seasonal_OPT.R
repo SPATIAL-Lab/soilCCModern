@@ -174,8 +174,8 @@ plot(rmses.rast_hq, main="", cex.lab=1.3, cex.axis=1.3, xlab="% Seasonal Rainfal
 par(mar=c(5.5, 0, 0, 7))
 plot(rmses.rast_dq, yaxt='n', cex.lab=1.3, cex.axis=1.3, main="", xlab="% Seasonal Rainfall", ylab="", xlim=c(0,1), ylim=c(0,1), zlim=c(2.5,6.5))  #now need to make a nice plot...
 mtext("RMSE, (\u2030)", 4, line=0.5, cex=1.3)
-dev.off()
 
+dev.off()
 
 
 
