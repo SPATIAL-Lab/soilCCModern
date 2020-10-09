@@ -503,7 +503,7 @@ SensData_z <- cbind(z_sens, z)
 
 # Graphing sensitivity tests. 
 
-jpeg("SensitivityTestGraphs.jpg", units="in", res=300, width = 8, height = 14.5)
+#jpeg("SensitivityTestGraphs.jpg", units="in", res=300, width = 8, height = 14.5)
 
 layout(matrix(c(1,2,3,4,5,6,7,8), 4, 2, byrow=TRUE), widths=c(1.2,1))
 
@@ -552,4 +552,4 @@ par(mar=c(4,1,1,1))
 plot(z ~ d18O_z, data=SensData_z, col="darkgray",  cex=1.3, cex.axis = 1.5, cex.lab = 1.7, xlim=c(-8, 8), ylim=c(100, 0), yaxt='n', ylab = "", lwd=2, type="l", xlab=expression(paste(delta[carbonate], ("\u2030"))), pch=16)
 text(-8, 2, "h", cex=1.7)
 
-dev.off()
+#dev.off()

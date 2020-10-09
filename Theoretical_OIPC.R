@@ -7,24 +7,6 @@ nsynth = 10000
 #set seed
 set.seed(1)
 
-
-for(i in 1:nrow(sites_OIPC)){
-  
-  if(sites_OIPC[i, "Lat"] < 0) {
-    sites_OIPC[i, "d18O_OIPC_1"] = sites_OIPC[i, "d18O_OIPC_jja"]
-    sites_OIPC[i, "d18O_OIPC_2"] = sites_OIPC[i, "d18O_OIPC_son"]
-    sites_OIPC[i, "d18O_OIPC_3"] = sites_OIPC[i, "d18O_OIPC_djf"]
-    sites_OIPC[i, "d18O_OIPC_4"] = sites_OIPC[i, "d18O_OIPC_mam"]
-  }
-  else{
-    sites_OIPC[i, "d18O_OIPC_1"] = sites_OIPC[i, "d18O_OIPC_djf"]
-    sites_OIPC[i, "d18O_OIPC_2"] = sites_OIPC[i, "d18O_OIPC_mam"]
-    sites_OIPC[i, "d18O_OIPC_3"] = sites_OIPC[i, "d18O_OIPC_jja"]
-    sites_OIPC[i, "d18O_OIPC_4"] = sites_OIPC[i, "d18O_OIPC_son"]
-  }
-}
-
-
 sm_forward_evap.OIPC = function(Pa, Tma, PfPCQ, TmPCQ_min_a, Ra, TmWQ_min_a, DQ, O_1, O_2, O_3, O_4){
   
   #Pre-industrial pCO2 and carbon isotope value of atmospheric CO2

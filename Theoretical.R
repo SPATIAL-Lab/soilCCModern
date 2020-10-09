@@ -250,7 +250,7 @@ pal_Pa = brewer.pal(5, "Blues")
 d13C_al <- c(min(c((wq_comp_pre$d13C - wq_comp_pre$d13C_sd), (wq_comp_pre$d13C.measured - C_site_sd), (dq_comp_pre$d13C - dq_comp_pre$d13C_sd), (dq_comp_pre$d13C.measured - C_site_sd))), max(c((wq_comp_pre$d13C + wq_comp_pre$d13C_sd), (wq_comp_pre$d13C.measured + C_site_sd), (dq_comp_pre$d13C + dq_comp_pre$d13C_sd), (dq_comp_pre$d13C.measured + C_site_sd))))
 d18O_al <- c(min(c((wq_comp_pre$d18O - wq_comp_pre$d18O_sd), (wq_comp_pre$d18O.measured - O_site_sd), (dq_comp_pre$d18O - dq_comp_pre$d18O_sd), (dq_comp_pre$d18O.measured - O_site_sd))), max(c((wq_comp_pre$d18O + wq_comp_pre$d18O_sd), (wq_comp_pre$d18O.measured + O_site_sd), (dq_comp_pre$d18O + dq_comp_pre$d18O_sd), (dq_comp_pre$d18O.measured + O_site_sd))))
 
-jpeg("Theoretical.jpg", units="in", res=300, width=8.5, height=7.5)
+#jpeg("Theoretical.jpg", units="in", res=300, width=8.5, height=7.5)
 
 layout(matrix(c(1,2,3,4), 2, 2, byrow=TRUE), heights=c(1,1.1,1,1.1), widths=c(1,1.05,1,1.05))
 par(mar=c(2,5,1,0))
@@ -298,7 +298,7 @@ text(-27,10,"d", cex=1.5)
 
 legend("bottomright", title = expression(paste("P"[a]," (mm)")), cex=0.8, fill=pal_Pa, legend=c("0 - 200", "200 - 400", "400 - 600", "600 - 800", "800 - 1000"))
 
-dev.off()
+#dev.off()
 
 ## Basic stats
 pre_lm_warm_C <- lm(wq_comp_pre$d13C ~ wq_comp_pre$d13C.measured)

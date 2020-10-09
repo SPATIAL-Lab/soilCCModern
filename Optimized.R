@@ -459,7 +459,7 @@ pal_map = brewer.pal(5, "Blues")
 d13C_al_opt <- c(min(c((wq.comp.opt$d13C - wq.comp.opt$d13C_sd), (wq.comp.opt$d13C.measured - C_site_sd), (dq.comp.opt$d13C - dq.comp.opt$d13C_sd), (dq.comp.opt$d13C.measured - C_site_sd))), max(c((wq.comp.opt$d13C + wq.comp.opt$d13C_sd), (wq.comp.opt$d13C.measured + C_site_sd), (dq.comp.opt$d13C + dq.comp.opt$d13C_sd), (dq.comp.opt$d13C.measured + C_site_sd))))
 d18O_al_opt <- c(min(c((wq.comp.opt$d18O - wq.comp.opt$d18O_sd), (wq.comp.opt$d18O.measured - O_site_sd), (dq.comp.opt$d18O - dq.comp.opt$d18O_sd), (dq.comp.opt$d18O.measured - O_site_sd))), max(c((wq.comp.opt$d18O + wq.comp.opt$d18O_sd), (wq.comp.opt$d18O.measured + O_site_sd), (dq.comp.opt$d18O + dq.comp.opt$d18O_sd), (dq.comp.opt$d18O.measured + O_site_sd))))
 
-jpeg("Optimized.jpg", units="in", res=300, width=8.5, height=7.5)
+#jpeg("Optimized.jpg", units="in", res=300, width=8.5, height=7.5)
 
 layout(matrix(c(1,2,3,4), 2, 2, byrow=TRUE), heights=c(1,1.1,1,1.1), widths=c(1,1.05,1,1.05))
 par(mar=c(2,5,1,0))
@@ -507,7 +507,7 @@ text(-26,9,"d", cex=1.5)
 
 legend("bottomright", title = expression(paste("P"[a]," (mm)")), cex=0.8, fill=pal_Pa, legend=c("0 - 200", "200 - 400", "400 - 600", "600 - 800", "800 - 1000"))
 
-dev.off()
+#dev.off()
 
 ## Basic stats
 opt_lm_warm_C <- lm(wq.comp.opt$d13C ~ wq.comp.opt$d13C.measured)

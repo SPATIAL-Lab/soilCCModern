@@ -207,7 +207,7 @@ esw_opt_dq.depth
 
 #Graph
 
-jpeg("Evap_OPT_depth.jpg", units="in", res=300, width=9.15, height=4.68)
+#jpeg("Evap_OPT_depth.jpg", units="in", res=300, width=9.15, height=4.68)
 
 layout(matrix(c(1,2), 1, 2, byrow = TRUE), widths=c(1.001,1))
 
@@ -219,7 +219,7 @@ plot(rmses.rast_dq.depth, yaxt='n', cex.lab=1, cex.axis=1.3, main="", xlab="SP (
 mtext("b",3,line=0.25,adj=0, cex=1.3)
 mtext("RMSE, (\u2030)", 4, line=0.5, cex=1.3)
 
-dev.off()
+#dev.off()
 
 
 

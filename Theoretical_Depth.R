@@ -240,7 +240,7 @@ pal_map = brewer.pal(5, "Blues")
 d13C_al.depth <- c(min(c((wq.comp.depth$d13C - wq.comp.depth$d13C_sd), (wq.comp.depth$d13C.measured - C_site_sd), (dq.comp.depth$d13C - dq.comp.depth$d13C_sd), (dq.comp.depth$d13C.measured - C_site_sd))), max(c((wq.comp.depth$d13C + wq.comp.depth$d13C_sd), (wq.comp.depth$d13C.measured + wq.comp.depth$d13C_sd), (dq.comp.depth$d13C + dq.comp.depth$d13C_sd), (dq.comp.depth$C_site_sd + dq.comp.depth$d13C_sd))))
 d18O_al.depth <- c(min(c((wq.comp.depth$d18O - wq.comp.depth$d18O_sd), (wq.comp.depth$d18O.measured - O_site_sd), (dq.comp.depth$d18O - dq.comp.depth$d18O_sd), (dq.comp.depth$d18O.measured - O_site_sd))), max(c((wq.comp.depth$d18O + wq.comp.depth$d18O_sd), (wq.comp.depth$d18O.measured + wq.comp.depth$d18O_sd), (dq.comp.depth$d18O + dq.comp.depth$d18O_sd), (dq.comp.depth$O_site_sd + dq.comp.depth$d18O_sd))))
 
-jpeg("Theoretical_depth.jpg", units="in", res=300, width=8.5, height=7.5)
+#jpeg("Theoretical_depth.jpg", units="in", res=300, width=8.5, height=7.5)
 
 layout(matrix(c(1,2,3,4), 2, 2, byrow=TRUE), heights=c(1,1.1,1,1.1), widths=c(1,1.05,1,1.05))
 par(mar=c(2,5,1,0))
@@ -288,7 +288,7 @@ text(-18,21,"d", cex=1.5)
 
 legend("bottomright", title = expression(paste("P"[a]," (mm)")), cex=0.8, fill=pal_Pa, legend=c("0 - 200", "200 - 400", "400 - 600", "600 - 800", "800 - 1000"))
 
-dev.off()
+#dev.off()
 
 ## Basic stats
 

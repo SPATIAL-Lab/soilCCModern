@@ -1,5 +1,9 @@
 library(raster)
 library(scales)
+library(rgdal)
+
+# Read in rasters - this may make your computer slow
+load("rasters.RData")
 
 # Build fuctions for each isotope system and PCQ season
 raster_opt_wq_dC = function(Pa, Tma, PfPCQ, TmPCQ_min_a, Ra){
@@ -495,17 +499,6 @@ raster_opt_dq_dC <- Vectorize(raster_opt_dq_dC)
 raster_opt_wq_dO <- Vectorize(raster_opt_wq_dO)
 raster_opt_dq_dO <- Vectorize(raster_opt_dq_dO)
 
-setwd("C:/Users/femal/Dropbox/worldclim/")
-
-PfWQ <- raster("wc2.0_2.5m_PfWQ.tif")
-PfDQ <- raster("wc2.0_2.5m_PfDQ.tif")
-TmWQ_min_a <- raster("wc2.0_2.5m_TmWQ_min_a.tif")
-TmDQ_min_a <- raster("wc2.0_2.5m_TmDQ_min_a.tif")
-Pa <- raster("wc2.0_2.5m_Pa.tif")
-Tma <- raster("wc2.0_2.5m_Tma.tif")
-DQ <- raster("DQ.tif")
-Ra <- raster("Ra.tif")
-C4 <- raster("C4.tif")
 
 #Use overlay to do complex raster calcs
 dC_Carb_map_wq <- overlay(Pa, Tma, PfWQ, TmWQ_min_a, Ra, fun=raster_opt_wq_dC)
@@ -541,38 +534,12 @@ dO_Carb_a <- (R_O_Carb / RO.vpdb - 1) * 1000
 
 dO_diff_map <- dO_Carb_map_wq - dO_Carb_a
 
-#Save rasters
-writeRaster(dO_Carb_map_wq, "dO_Carb_map_wq.tif", overwrite=TRUE)
-writeRaster(dC_Carb_map_wq, "dC_Carb_map_wq.tif", overwrite=TRUE)
-writeRaster(dO_Carb_map_dq, "dO_Carb_map_dq.tif", overwrite=TRUE)
-writeRaster(dC_Carb_map_dq, "dC_Carb_map_dq.tif", overwrite=TRUE)
-writeRaster(dC_Carb_map_diff, "dC_Carb_map_diff.tif", overwrite=TRUE)
-writeRaster(dO_Carb_map_diff, "dO_Carb_map_diff.tif", overwrite=TRUE)
-writeRaster(dO_diff_map, "dO_diff_map.tif", overwrite=TRUE)
-writeRaster(plant_carb_diff_map, "plant_carb_diff_map.tif", overwrite=TRUE)
-
-#Read in rasters if they aren't already
-#dC_Carb_map_wq <- raster("dC_Carb_map_wq.tif")
-#dC_Carb_map_dq <- raster("dC_Carb_map_dq.tif")
-#dO_Carb_map_wq <- raster("dO_Carb_map_wq.tif")
-#dO_Carb_map_dq <- raster("dO_Carb_map_dq.tif")
-#dC_Carb_map_diff <- raster("dC_Carb_map_diff.tif")
-#dO_Carb_map_diff <- raster("dO_Carb_map_diff.tif")
-#dO_diff_map <- raster("dO_diff_map.tif")
-#plant_carb_diff_map <- raster("plant_carb_diff_map.tif")
-#C4_10 <- raster("C4_10.tif")
-
-# Graph
-
 # Delete C4 < 10 % veg cover
 C4_10 <- C4
 C4_10[C4 < 10] <- NA
 plot(C4_10)
-writeRaster(C4_10, "C4_10.tif")
 
-setwd("C:/Users/femal/Dropbox/Soil_C_modeling/Modern/R Scripts/")
-
-jpeg("PredMaps_OPT.jpg", units="in", res=300, width=9.8, height=7)
+#jpeg("PredMaps_OPT.jpg", units="in", res=300, width=9.8, height=7)
 
 layout(matrix(c(1,2,3,4,5,6), 3, 2, byrow=TRUE), heights=c(1,1,1,1), widths=c(1,1,1,1))
 
@@ -620,4 +587,4 @@ mtext(expression(paste(Delta^{13}, "C"[wq - plant] ," (\u2030)")), 4, line=1.1, 
 text(-170, 80 ,"f", cex=1.5)
 plot(C4_10, col=grey(c(0.4,0.3,0.2), alpha=0.4), add = TRUE, legend=F)
 
-dev.off()
+#dev.off()
