@@ -1,0 +1,8 @@
+.RData*
+.Rhistory
+*.tmp
+
+archive*
+output*
+figures*
+exp_code*
