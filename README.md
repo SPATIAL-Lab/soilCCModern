@@ -14,41 +14,41 @@ Calculates typical standard deviations of carbonate isotope values at a site
 ## T_O_corr.R
 Runs statistics on the d18Op-T correlation and OIPC d18Op values
 
-# Theoretical.R
+## Theoretical.R
 Runs the theoretical model predictions and comparison to modern data
 	
-# Theoretical_depth.R
+## Theoretical_depth.R
 Runs the measured-depth theoretical model predictions and comparison to modern data
 	
-# Theoretical_OIPC.R 
+## Theoretical_OIPC.R 
 Runs the theoretical model with OIPC oxygen isotope values instead of using the d18O-T relationship
 	
-# Respiration_OPT.R
+## Respiration_OPT.R
 Runs the optimization of respiration rate 
 	
-# Respiration_OPT_depth.R
+## Respiration_OPT_depth.R
 Runs the optimization of respiration rate for the measured-depth model
 	
-# Evap_Seasonal_OPT.R
+## Evap_Seasonal_OPT.R
 Runs the optimization for seasonal precipitation and evaporative effects 
 	
-# Evap_Seasonal_OPT_depth.R
+## Evap_Seasonal_OPT_depth.R
 Runs the optimization for seasonal precipitation and evaporative effects for the measured-depth model
 	
-# Optimized.R
+## Optimized.R
 Runs the optimized model and comparison to modern data
 	
-# Optimized_depth.R
+## Optimized_depth.R
 Runs the optimized measured-depth model and comparison to modern data
 	
-# SensTest.R
+## SensTest.R
 Runs the sensitivity tests
 	
-# PredMaps_OPT.R
+## PredMaps_OPT.R
 Runs the spatial predictions of the optimized model
 
-# Input_Data_Final.RData
+## Input_Data_Final.RData
 Input carbonate data and the WorldClim climate variables at each site
 
-# rasters.RData
+## rasters.RData
 WorldClim rasters needed to use PredMaps_OPT.R and predict carbonate isotope values worldwide - this file is available in the Zenodo archive for this repository
